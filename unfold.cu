@@ -7,91 +7,93 @@
 
 using namespace std;
 
-//#define M 1000
-//#define N 1000
 
-__global__ void unfoldkernel(bool* a, bool*mask, bool* c, int m, int n){
+__global__ void unfoldkernel(bool* a, bool*mask, bool* c, int n){
 	int i = blockIdx.x*blockDim.x+ threadIdx.x;
 	int j = blockIdx.y*blockDim.y + threadIdx.y;
 
-	if(i<m && j<n)
+	if(i<n && j<n)
 		c[i*n+j] = a[i*n+j]&mask[j];
-/*	if(i<m){
+}
+
+void print(bool* a, int m, int n){
+	for(int i=0;i<m;i++){
 		for(int j=0;j<n;j++)
-			c[i*n+j] = a[i*n+j]&mask[j];
-	}*/
+			cout << a[i*n+j] << '\t';
+		cout << endl;
+	}
+	cout << endl;
 }
 
 int main(int argc, char* argv[]){
-
-	clock_t start, end;
+	//Initialisation variables
 	ifstream in;
 	in.open(argv[1]);
-	int M,N;
-	M = N = atoi(argv[2]);
-	int iter = atoi(argv[3]);
-	long long int size= sizeof(bool) * M * N;
+	int n= atoi(argv[2]);
+	int iterations = atoi(argv[3]);
+	
+	//clock variables
+	clock_t start, end;
 	double gpu_time_used, cpu_time_used;
-
-	bool* mat = (bool*)malloc(size);
-	bool* mask = (bool*)malloc(sizeof(bool)*N);
-	bool* res = (bool*)malloc(size);
-
-	bool *d_mat, *d_mask, *d_res;
+	
+	//Threads and block configuration
 	dim3 threadsPerBlock(16,16);
-	dim3 numBlocks((M+threadsPerBlock.x-1)/threadsPerBlock.x, (N+threadsPerBlock.y-1)/threadsPerBlock.y);
-//	int threadsPerBlock = 100;
-//	int numBlocks = (M+threadsPerBlock-1)/threadsPerBlock;
-	for(long long int i=0; i<M; i++){
-		for(long long int j=0; j<N; j++)
-			in >> mat[i*N+j];
+	dim3 numBlocks((n+threadsPerBlock.x-1)/threadsPerBlock.x, (n+threadsPerBlock.y-1)/threadsPerBlock.y);
+	
+	//sizes of matrices
+	int size_mat = sizeof(bool) * n * n;
+	int size_res = size_mat;
+	int size_mask = sizeof(bool)*n;
+
+	//memory allocation in host machine
+	bool* mat = (bool*)malloc(size_mat);
+	bool* res = (bool*)malloc(size_res);
+	bool* mask = (bool*)malloc(size_mask);
+
+	//Initializing matrices
+	for(int i = 0; i < n; i++){
+		for(int j = 0; j < n; j++)
+			in >> mat[i*n+j];
 	}
-	for(long long int i=0;i<N;i++)
+	for(int i = 0; i < n; i++)
 		in >> mask[i];
 
-	
-	
-	start = clock();
-	cudaMalloc((void**)&d_mat, size);
-	cudaMalloc((void**)&d_mask, sizeof(bool)*N);
-	cudaMalloc((void**)&d_res, size);
+	bool *d_mat, *d_mask, *d_res;
 
-	cudaMemcpy(d_mat, mat, size, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_mask, mask, sizeof(bool)*N, cudaMemcpyHostToDevice);
-	for(int k=0; k<iter; k++)
-		unfoldkernel<<<numBlocks, threadsPerBlock>>>(d_mat, d_mask,d_res,M,N);
-	cudaMemcpy(res, d_res, size, cudaMemcpyDeviceToHost);	
+	start = clock();
+
+	//Memory allocation in GPU
+	cudaMalloc((void**)&d_mat, size_mat);
+	cudaMalloc((void**)&d_mask, size_mask);
+	cudaMalloc((void**)&d_res, size_res);
+
+	//copy data from host to GPU
+	cudaMemcpy(d_mat, mat, size_mat, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_mask, mask, size_mask, cudaMemcpyHostToDevice);
+
+	for(int k=0; k<iterations; k++)
+		unfoldkernel<<<numBlocks, threadsPerBlock>>>(d_mat, d_mask,d_res, n);
+
+	//copying result
+	cudaMemcpy(res, d_res, size_res, cudaMemcpyDeviceToHost);
 
 	end = clock();
+	
+	//calculating time taken by GPU
 	gpu_time_used = ((double)(end-start))/CLOCKS_PER_SEC;
-//	cout << "GPU: " << time_used << endl;
 
+	//CPU computation
 	start=clock();
-	for(int k=0; k<iter; k++){
-		for(int j=0; j<N; j++){
-			for(int i=0; i<M; i++)
-				res[j] = mat[i*N+j]&mask[j];
+	for(int k = 0; k < iterations; k++){
+		for(int j = 0; j < n; j++){
+			for(int i = 0; i < n; i++)
+				res[j] = mat[i*n+j]&mask[j];
 		}
 	}	
 	end = clock();
 	
+	//calculating time taken by CPU
 	cpu_time_used = ((double)(end-start))/CLOCKS_PER_SEC;
-//	cout << "CPU: " << time_used << endl;
 	cout << "CPU/GPU: " << cpu_time_used/gpu_time_used << endl;
-/*	for(int i=0;i<M;i++){
-		for(int j=0;j<N;j++)
-			cout << mat[i*N+j] << '\t';
-		cout << endl;
-	}
-	cout << endl;
-	for(int i=0;i<N;i++)
-		cout << mask[i] << '\t';
-	cout << endl << endl;
-	for(int i=0;i<M;i++){
-		for(int j=0;j<N;j++)
-			cout << res[i*N+j] << '\t';
-		cout << endl;
-	}
-*/
 	return 0;
 }

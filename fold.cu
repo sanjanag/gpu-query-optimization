@@ -7,17 +7,15 @@
 
 using namespace std;
 
-//#define M 1000
-//#define N 1000
 
-__global__ void foldkernel(bool* a, bool*c, int m, int n){
+__global__ void foldkernel(bool* a, bool*c, int n, int split){
 	int threadid = blockIdx.x*blockDim.x+ threadIdx.x;
-	int i = (blockIdx.x*blockDim.x+ threadIdx.x)*4;
+	int i = (blockIdx.x*blockDim.x+ threadIdx.x)*split;
 	
-	for(int k=0; k<4; k++){
-		if(i+k >= m)
+	for(int k = 0; k < split; k++){
+		if(i+k >= n)
 			break;
-		for(int j=0; j<n;j++ ){
+		for(int j = 0; j < n; j++){
 			c[threadid*n+j] |= a[(i+k)*n+j];
 		}
 	}
@@ -31,71 +29,89 @@ void print(bool* a, int m, int n){
 	}
 	cout << endl;
 }
+
 int main(int argc, char* argv[]){
-	int M,N;
-	M = N = atoi(argv[2]);
-	int iter = atoi(argv[3]);
-
-	clock_t start, end;
+	//Initialisation variables
 	ifstream in;
-	ofstream out;
-	in.open(argv[1]);
-	long long int size= sizeof(bool) * M * N;
+	in.open(argv[1]);  //data_file
+	int n = atoi(argv[2]); //dimension of bitmat
+	int split = atoi(argv[3]);
+	int iterations = atoi(argv[4]); //Iterations to compare the results
+
+	//clock variables
+	clock_t start, end;
 	double gpu_time_used,cpu_time_used;
+	
+	//Threads and block configuration
+	int rows_res = (n+split-1)/split;
+	int threadsPerBlock = 512;
+	long long int numBlocks = (rows_res+threadsPerBlock-1)/threadsPerBlock;
 
-	bool* mat = (bool*)malloc(size);
-	bool* res = (bool*)malloc(sizeof(bool)*((M+4-1)/4)*N);
-	bool* mask = (bool*)malloc(sizeof(bool)*N);
+	//sizes of matrices
+	int size_mat = sizeof(bool) * n * n;
+	int size_res = sizeof(bool) * (rows_res) * n;
+	int size_mask = sizeof(bool) * n;
 
-	bool *d_mat,*d_res;
-	int threadsPerBlock = 10;
-	long long int numBlocks = (M+threadsPerBlock-1)/threadsPerBlock;
-
-	for(long long int i=0; i<M; i++){
-		for(long long int j=0; j<N; j++)
-			in >> mat[i*N+j];
+	//memory allocation in host machine
+	bool* mat = (bool*)malloc(size_mat);
+	bool* res = (bool*)malloc(size_res);
+	bool* mask = (bool*)malloc(size_mask);
+	
+	//Initializing matrices
+	for(int i = 0; i < n; i++){
+		for(int j = 0; j < n; j++)
+			in >> mat[i*n+j];
 	}
 
-	for(long long int i=0;i<((M+4-1)/4);i++)
-		for(int j=0;j<N;j++)
-			res[i*N+j]=false; 
-	for(int i=0;i<N;i++)
+	for(int i = 0; i < rows_res; i++)
+		for(int j = 0; j < n; j++)
+			res[i*n+j]=false; 
+	for(int i = 0; i < n; i++)
 		mask[i]=false;	
+	
 
-	//print(mat, M, N);
+	bool *d_mat,*d_res;
+
 	start=clock();
 
-	cudaMalloc((void**)&d_mat, size);
-	cudaMalloc((void**)&d_res, sizeof(bool)*((M+4-1)/4)*N);
-	cudaMemcpy(d_mat, mat, size, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_res, res, sizeof(bool)*((M+4-1)/4)*N, cudaMemcpyHostToDevice);
+	//Memory allocation in GPU
+	cudaMalloc((void**)&d_mat, size_mat);
+	cudaMalloc((void**)&d_res, size_res);
 
-	for(int k=0;k<iter;k++)
-		foldkernel<<<numBlocks, threadsPerBlock>>>(d_mat, d_res,M,N);
+	//copy data from host to GPU
+	cudaMemcpy(d_mat, mat, size_mat, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_res, res, size_res, cudaMemcpyHostToDevice);
 
-	cudaMemcpy(res, d_res, sizeof(bool)*((M+4-1)/4)*N, cudaMemcpyDeviceToHost);	
-	for(int k=0;k<iter;k++){
-		for(int i=0;i<((M+4-1)/4);i++){
-			for(int j=0;j<N;j++)
-				mask[j] |= res[i*N+j];
+	for(int k = 0; k < iterations; k++)
+		foldkernel<<<numBlocks, threadsPerBlock>>>(d_mat, d_res, n, split);
+	
+	//copying result
+	cudaMemcpy(res, d_res, size_res, cudaMemcpyDeviceToHost);	
+
+	//computing final result
+	for(int k = 0; k < iterations; k++){
+		for(int i = 0; i < rows_res; i++){
+			for(int j = 0; j < n; j++)
+				mask[j] |= res[i*n+j];
 		}
 	}	
 	end = clock();
-	//print(res,((M+4-1)/4),N);
-	//print(mask,1,N);
+
+	//calculating time taken by GPU
 	gpu_time_used = ((double)(end-start))/CLOCKS_PER_SEC;
-//	cout << "GPU: " << gpu_time_used << endl;
+	
+
+	//CPU computation
 	start=clock();
-	for(int k=0;k<iter;k++){
-		for(int i=0;i<M;i++){
-			for(int j=0;j<N;j++)
-				mask[j] |= mat[i*N+j];
+	for(int k = 0; k < iterations; k++){
+		for(int i = 0; i < n; i++){
+			for(int j = 0; j < n; j++)
+				mask[j] |= mat[i*n+j];
 		}
 	}	
 	end = clock();
-	//print(mask,1,N);	
+	//calculating time taken by CPU
 	cpu_time_used = ((double)(end-start))/CLOCKS_PER_SEC;
-//	cout << "CPU: " << cpu_time_used << endl;
 	cout << "CPU/GPU: " << cpu_time_used/gpu_time_used << endl;	
 	return 0;
 }
