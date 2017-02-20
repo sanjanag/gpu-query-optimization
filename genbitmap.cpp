@@ -29,7 +29,11 @@ int main(){
         for(int j=0;j<n;j++)
             in >> inp[i*n+j];
     }
-
+    for(int i=0;i<n;i++){
+        for(int j=0;j<n;j++)
+            cout << inp[i*n+j] << '\t';
+        cout << endl;
+    }
     int cols = (n%8>0 ? n/8+1 : n/8);
     int bitmat_size = n*cols;
     unsigned char* bitmat = (unsigned char*)malloc(sizeof(unsigned char)*bitmat_size);
