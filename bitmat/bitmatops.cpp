@@ -4719,6 +4719,7 @@ unsigned int load_from_dump_file(char *fname_dump, unsigned int bmnum, BitMat *b
 
 	assert((readtcnt && readarray) || (!readtcnt && !readarray && ((fd == 0) ^ (NULL == fpos))));
 
+/* MEDHA: IMPORTANT */
 #if MMAPFILES
 	if (fpos == NULL) {
 		fpos = mmap_table[string(fname_dump)];
@@ -4744,7 +4745,7 @@ unsigned int load_from_dump_file(char *fname_dump, unsigned int bmnum, BitMat *b
 
 	assert((fd == 0) ^ (NULL == fpos));
 //	cout << "load_from_dump_file: offset " << offset << endl;
-
+/* MEDHA: IMPORTANT */
 	if (readtcnt) {
 		bitmat->num_triples = 0;
 #if MMAPFILES
@@ -4760,6 +4761,7 @@ unsigned int load_from_dump_file(char *fname_dump, unsigned int bmnum, BitMat *b
 		}
 	}
 //	cout << "Num triples1 " << bitmat->num_triples << endl;
+/* MEDHA: IMPORTANT */
 	if (readarray) {
 		if (bitmat->subfold == NULL) {
 			bitmat->subfold = (unsigned char *) malloc (bitmat->subject_bytes * sizeof (unsigned char));
@@ -4770,7 +4772,7 @@ unsigned int load_from_dump_file(char *fname_dump, unsigned int bmnum, BitMat *b
 			bitmat->objfold = (unsigned char *) malloc (bitmat->object_bytes * sizeof (unsigned char));
 			memset(bitmat->objfold, 0, bitmat->object_bytes * sizeof (unsigned char));
 		}
-
+/*MEDHA: skip */
 		if (bitmat->dimension == PSO_BITMAT || bitmat->dimension == POS_BITMAT || comp_folded_arr) {
 			//first read size of the compressed array
 			unsigned int comp_arr_size = 0;
@@ -4817,6 +4819,7 @@ unsigned int load_from_dump_file(char *fname_dump, unsigned int bmnum, BitMat *b
 			}
 
 		} else {
+		/* MEDHA: IMPORTANT */
 #if MMAPFILES
 			memcpy(bitmat->subfold, fpos, bitmat->subject_bytes);
 			fpos += bitmat->subject_bytes;
@@ -4833,6 +4836,7 @@ unsigned int load_from_dump_file(char *fname_dump, unsigned int bmnum, BitMat *b
 //	cout << "Num bits in subfold " << count_bits_in_row(bitmat->subfold, bitmat->subject_bytes) << endl;
 //	cout << "Num bits in objfold " << count_bits_in_row(bitmat->objfold, bitmat->object_bytes) << endl;
 //	print_set_bits_in_row(bitmat->objfold, bitmat->object_bytes);
+/*MEDHA: skip */
 	unsigned int limit_bytes = 0;
 	if (maskarr_size == 0) {
 		assert(maskarr == NULL);
@@ -4860,7 +4864,7 @@ unsigned int load_from_dump_file(char *fname_dump, unsigned int bmnum, BitMat *b
 	//////////
 	//DEBUG
 //	off64_t total_size = 0;
-
+/* MEDHA: IMPORTANT */
 	if (maskarr == NULL || maskarr_dim == COLUMN) {
 		for (unsigned int i = 0; i < bitmat->subject_bytes; i++) {
 			if (bitmat->subfold[i] == 0x00) {
@@ -4900,7 +4904,9 @@ unsigned int load_from_dump_file(char *fname_dump, unsigned int bmnum, BitMat *b
 			}
 		}
 
-	} else if (maskarr_dim == ROW) {
+	} 
+	/* MEDHA: skip */
+	else if (maskarr_dim == ROW) {
 		if ((total_set_bits <= ((maskarr_size * 8)/SELECTIVITY_THRESHOLD)) && subfold_bits > 10*total_set_bits &&
 				(bitmat->dimension == SPO_BITMAT || bitmat->dimension == OPS_BITMAT)) {
 //			cout << "--------- load_from_dump_file: NOT loading the traditional way" << endl;
