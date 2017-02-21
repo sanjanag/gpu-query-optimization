@@ -138,10 +138,45 @@ void print_bitmat(list<row> bm){
     }
 }
 
-int main(){
+void print_mask(unsigned char* mask, int size){
+    for(int i=0;i<size;i++)
+        printf("%d ",mask[i]);
+    cout << endl;
+}
+
+void fold_bitmat(list<row> bm, unsigned char* mask, int size_mask){
+    //print_mask(mask,size_mask);
+    int n = bm.size();
+    int gap_size = sizeof(unsigned int);
+    for(list<row>::iterator it=bm.begin(); it!=bm.end(); it++){
+        unsigned char* data=(*it).data;
+        int size;
+        memcpy(&size, data, gap_size);
+        int nums = (size-1)/gap_size;
+        int count=0;
+        data+=gap_size;
+        bool flag = *data;
+        data++;
+        for(int i=0;i<nums;i++){
+            int tmp;
+            memcpy(&tmp, data, gap_size);
+            data+=gap_size;
+            if(flag){
+                for(int pos=count;pos <(count+tmp);pos++){
+                    mask[pos/8] |= (0x80 >> (pos%8));
+                }
+            }
+            count+=tmp;
+            flag = !flag;
+        }
+        //print_mask(mask,size_mask);
+    }
+}
+
+int main(int argc, char* argv[]){
     ifstream in;
     in.open("data.in");
-    int n=5;
+    int n=atoi(argv[1]);
     bool raw[n*n];
 
     //read sparse matrix from raw file
@@ -149,7 +184,7 @@ int main(){
         for(int j=0;j<n;j++)
             in >> raw[i*n+j];
     }
-    print(raw,n);
+    //print(raw,n);
     //compress sparse raw matrix
     vector<pair<bool,vector<unsigned int> > > comp_mat(n);
     compress_sparse_bitmat(raw,comp_mat,n);
@@ -163,7 +198,12 @@ int main(){
     //create bitmat
     list<row> bm;
     get_bitmat(bm, row_bytes,size_row_bytes, comp_mat);
+    //print_bitmat(bm);
 
-    print_bitmat(bm);
+    int size_mask = (n%8>0 ? n/8+1 : n/8);
+    unsigned char* mask = (unsigned char*)malloc(sizeof(unsigned char)*size_mask);
+    memset(mask,0,size_mask);
+    fold_bitmat(bm, mask, size_mask);
+    print_mask(mask,size_mask);
     return 0;
 }
