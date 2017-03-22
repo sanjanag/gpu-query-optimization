@@ -188,10 +188,12 @@ int get_sizeof_1dimarr(vector<row> bm){
 }
 
 void convert_bitmat_to_1dimarr(vector<row> bm, int* mapping, int n, unsigned char* gpu_input){
+    //cout << "hello\n";
     unsigned char* total_data = gpu_input;
     int gap_size = sizeof(unsigned int);
     int j = 0;
     for(int i=0; i < n; i++){
+        //cout << i << endl;
         int rowid = bm[j].rowid;
 
         if(rowid == i){
@@ -282,9 +284,9 @@ int main(int argc, char* argv[]){
 
     int size_gpu_input = get_sizeof_1dimarr(bm);
     unsigned char* gpu_input = (unsigned char*)malloc(size_gpu_input*sizeof(unsigned char));
-
+    //cout << "done\n";
     convert_bitmat_to_1dimarr(bm, mapping, n, gpu_input);
-
+    //cout << "done\n";
     int split = 8;
     int rows_res = (n+split-1)/split;
     int size_res = rows_res*size_mask;
@@ -292,7 +294,12 @@ int main(int argc, char* argv[]){
     unsigned char* d_input;
     unsigned char* d_res;
     unsigned char* res = (unsigned char*)malloc(size_res*sizeof(unsigned char));
+    for(int i=0; i<rows_res; i++){
+        for(int j=0;j<size_mask;j++)
+            res[i*size_mask+j] = 0x00;
+    }
     
+    //cout << "done\n";
 
 
     cudaMalloc((void**)&d_mapping, sizeof(int)*n);
@@ -302,10 +309,11 @@ int main(int argc, char* argv[]){
 
     cudaMemcpy(d_mapping, mapping, sizeof(int)*n, cudaMemcpyHostToDevice);
     cudaMemcpy(d_input, gpu_input, sizeof(unsigned char)* size_gpu_input, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_res, res, sizeof(unsigned char)*size_res, cudaMemcpyHostToDevice);
 
     int threadsPerBlock = 512;
     int numBlocks = (rows_res+threadsPerBlock-1)/threadsPerBlock;
-    
+    //cout << rows_res << '\t' << size_mask << '\t' << threadsPerBlock << '\t' << numBlocks << endl;
     foldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_res, n, size_mask, split);
 
     cudaMemcpy(res, d_res, size_res*sizeof(unsigned char), cudaMemcpyDeviceToHost);
