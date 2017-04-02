@@ -121,18 +121,23 @@ void print_comp_mat(vector<pair<bool,vector<unsigned int> > > comp_mat, int n){
 void print_bitmat(vector<row> bm){
     int n=bm.size();
     for(vector<row>::iterator it=bm.begin(); it!=bm.end(); it++){
-        cout <<"rowid: " <<  (*it).rowid << endl;
+        cout << (*it).rowid << endl;
         unsigned char* data = (*it).data;
         int size;
         memcpy(&size,data,sizeof(unsigned int));
-        cout <<"size: "<< size << endl;
+        cout << size << " ";
         data+=sizeof(unsigned int);
-        printf("flag: %d\n",*data);
+        if(data[0])
+            cout << 1 << " ";
+        else
+            cout << 0 << " ";
+        //printf("flag: %d\n",*data);
         data++;
         for(int j=0;j<((size-1)/sizeof(unsigned int)); j++){
             int tmp;
             memcpy(&tmp, data, sizeof(unsigned int));
-            printf("%d ",tmp);
+            cout << tmp << " ";
+            //printf("%d ",tmp);
             data+=sizeof(unsigned int);
         }
         cout << endl;
@@ -254,20 +259,24 @@ void get_mask(unsigned char* mask, bool* raw_mask, int size_mask, int n){
     }
 }
 
-void unfold_bitmat(vector<row> bm, unsigned char* mask, int size_mask){
+void unfold_bitmat(vector<row> bm, unsigned char* mask, int size_mask, vector<row>& ubm){
     int gap_size = sizeof(unsigned int);
     unsigned int andres_size = 0;
     unsigned char *andres = (unsigned char *) malloc (gap_size * 2 * size_mask + gap_size + 1 + 1024);
     
-
+    //vector<row> ubm;
+    
     for(vector<row>::iterator it = bm.begin(); it!= bm.end(); it++){
+        unsigned int andres_size = 0;
+        unsigned char *andres = (unsigned char *) malloc (gap_size * 2 * size_mask + gap_size + 1 + 1024);
+        unsigned int rowid = (*it).rowid;
         unsigned char* data  = (*it).data;
         unsigned int rowsize = 0;
         memcpy(&rowsize, data, gap_size);
         data += gap_size;
         unsigned int cnt = 0, total_cnt = (rowsize-1)/gap_size, tmpcnt = 0, triplecnt = 0,
                     prev1_bit = 0, prev0_bit = 0, tmpval = 0;
-        bool flag = data[0] & 0x80, begin = true, p1bit_set = false, p0bit_set = false;
+        bool flag = data[0], begin = true, p1bit_set = false, p0bit_set = false;
 
         while(cnt < total_cnt){
             memcpy(&tmpcnt, &data[cnt*gap_size+1], gap_size);
@@ -360,9 +369,9 @@ void unfold_bitmat(vector<row> bm, unsigned char* mask, int size_mask){
         }
         else{
             if(!p1bit_set){
-                data -= gap_size;
+                /*data -= gap_size;
                 free(data);
-                it = bm.erase(it);
+                it = bm.erase(it);*/
                 continue;
             }
             else{
@@ -374,11 +383,83 @@ void unfold_bitmat(vector<row> bm, unsigned char* mask, int size_mask){
 
         tmpval = andres_size - gap_size;
         memcpy(andres, &tmpval, gap_size);
-        data -= gap_size;
+        row r = {rowid,andres};
+        ubm.push_back(r);
+        /*data -= gap_size;
         free(data);
         (*it).data = (unsigned char*)malloc(andres_size);
-        memcpy((*it).data, andres, andres_size);
+        memcpy((*it).data, andres, andres_size);*/
     }
+}
+
+void print_raw_mask(bool* mask, int n){
+    for(int i=0;i<n;i++)
+        cout << mask[i] << " ";
+    cout << endl;
+}
+
+void brute_force_unfold(bool* in, bool* mask, bool* out, int n){
+    for(int i=0; i<n; i++){
+        for(int j=0; j<n; j++){
+            out[i*n+j] = in[i*n+j] & mask[j];
+        }
+    }
+}
+
+void test_unfold(vector<row> corr, vector<row> sample){
+    int m = corr.size();
+    int n = sample.size();
+    if(m!=n){
+        cout << "FAIL1\n";
+        return;
+    }
+
+    for(int i=0; i<n; i++){
+        unsigned int rowid1 = corr[i].rowid, rowid2 = sample[i].rowid;
+        if(rowid1!=rowid2){
+            cout << "FAIL2\n";
+            return;       
+        }
+
+        unsigned char* data1 = corr[i].data;
+        unsigned char* data2 = sample[i].data;
+        
+        int size1, size2;
+        memcpy(&size1, data1, sizeof(unsigned int));
+        memcpy(&size2, data2, sizeof(unsigned int));
+        if(size1!=size2){
+            cout << "FAIL3\n";
+            return;       
+        }
+        
+        
+        data1 += sizeof(unsigned int);
+        data2 += sizeof(unsigned int);        
+
+
+        if(data1[0] ^ data2[0]){
+            cout <<i <<  "FAIL4\n";
+            return;
+        }
+
+        data1++;
+        data2++;
+
+        for(int j=0; j<((size1-1)/sizeof(unsigned int)); j++){
+            int tmp1, tmp2;
+            memcpy(&tmp1, data1, sizeof(unsigned int));
+            memcpy(&tmp2, data2, sizeof(unsigned int));
+            if(tmp1!=tmp2){
+                cout << "FAIL5\n";
+                return;                 
+            }
+            
+            data1 += sizeof(unsigned int);
+            data2 += sizeof(unsigned int);
+        }
+    }   
+
+    cout << "PASS\n";
 }
 
 int main(int argc, char* argv[]){
@@ -397,13 +478,25 @@ int main(int argc, char* argv[]){
 
     for(int i=0;i<n;i++)
         in >> raw_mask[i];
-    //print(raw,n);
+
+    bool raw_out[n*n];
+    brute_force_unfold(raw, raw_mask, raw_out, n);
+    vector<pair<bool,vector<unsigned int> > > corr_out(n);
+    compress_sparse_bitmat(raw_out, corr_out, n);
+    int size_row_bytes = (n%8>0 ? n/8+1 : n/8);
+    unsigned char* out_row_bytes = (unsigned char*)malloc(size_row_bytes*sizeof(unsigned char));
+    memset(out_row_bytes, 0, size_row_bytes);
+    get_row_bytes(corr_out, n, out_row_bytes);
+    vector<row> out_bm;
+    get_bitmat(out_bm, out_row_bytes, size_row_bytes, corr_out);
+    
+    //CONVERT RAW INPUT TO BITMAT
     //compress sparse raw matrix
     vector<pair<bool,vector<unsigned int> > > comp_mat(n);
     compress_sparse_bitmat(raw,comp_mat,n);
 
     //create row_bytes array
-    int size_row_bytes = (n%8>0 ? n/8+1 : n/8);
+    //int size_row_bytes = (n%8>0 ? n/8+1 : n/8);
     unsigned char* row_bytes = (unsigned char*)malloc(size_row_bytes*sizeof(unsigned char));
     memset(row_bytes,0,size_row_bytes);
     get_row_bytes(comp_mat, n, row_bytes);
@@ -411,17 +504,22 @@ int main(int argc, char* argv[]){
     //create bitmat
     vector<row> bm;
     get_bitmat(bm, row_bytes,size_row_bytes, comp_mat);
-    print_bitmat(bm);
     
+
+    //CONVERT RAW MASK TO REQUIRED FORMAT
     int size_mask = (n%8>0 ? n/8+1 : n/8);
     unsigned char* mask = (unsigned char*)malloc(sizeof(unsigned char)*size_mask);
     memset(mask,0,size_mask);
     get_mask(mask, raw_mask, size_mask, n);
-    print_mask(mask, size_mask);
-
+    
+    //CPU UNFOLD
     vector<row> ubm;
-    unfold_bitmat(bm, mask, size_mask);
-    print_bitmat(bm);
+    unfold_bitmat(bm, mask, size_mask, ubm);
+    
+    //TESTER FUNCTION
+    test_unfold(out_bm, ubm);
+    //cout << "hello3" << endl;
+    //print_bitmat(bm);
 
     /*fold_bitmat(bm, mask, size_mask);
     print_mask(mask,size_mask);
