@@ -6,7 +6,7 @@
 #include <cstring>
 #include <vector>
 #include <utility>
-//#include <cuda.h>
+#include <cuda.h>
 
 using namespace std;
 
@@ -347,8 +347,6 @@ void get_mask(unsigned char* mask, bool* raw_mask, int size_mask, int n){
 
 void unfold_bitmat(vector<row> bm, unsigned char* mask, int size_mask, vector<row>& ubm){
     int gap_size = sizeof(unsigned int);
-    unsigned int andres_size = 0;
-    unsigned char *andres = (unsigned char *) malloc (gap_size * 2 * size_mask + gap_size + 1 + 1024);
     
     //vector<row> ubm;
     
@@ -583,6 +581,7 @@ void test_unfold(vector<row> corr, vector<row> sample){
 void convert_1dimarr_to_bitmat(unsigned char* input, vector<row>& bm, int n, int size_andres){
     int gap_size = sizeof(unsigned char);
     for(int i=0;i<n;i++){
+        cout << i << endl;
         unsigned char* data = input+size_andres*i;
         unsigned int rowsize;
         memcpy(&rowsize, data, gap_size);
@@ -656,6 +655,7 @@ int main(int argc, char* argv[]){
     //TESTER FUNCTION
     test_unfold(out_bm, ubm);
     
+    cout << "hello1\n";    
     int mapping[n];
     for(int i=0; i<n; i++)
         mapping[i] = i;
@@ -663,7 +663,7 @@ int main(int argc, char* argv[]){
     int size_gpu_input = get_sizeof_1dimarr(bm);
     unsigned char* gpu_input = (unsigned char*)malloc(size_gpu_input*sizeof(unsigned char));
     convert_bitmat_to_1dimarr(bm, mapping, n, gpu_input);
-
+    int gap_size = sizeof(unsigned int);
     int size_gpu_output =  (gap_size * 2 * size_mask + gap_size + 1 + 1024)*n;
     unsigned char* gpu_output = (unsigned char*)malloc(size_gpu_output*sizeof(unsigned char));
     for(int i=0;i<size_gpu_output ;i++)
@@ -682,30 +682,34 @@ int main(int argc, char* argv[]){
             res[i*size_mask+j] = 0x00;
     }
     */
-
+    cout << "hello2\n";
     cudaMalloc((void**)&d_mapping, sizeof(int)*n);
     cudaMalloc((void**)&d_input, size_gpu_input*sizeof(unsigned char));
     cudaMalloc((void**)&d_mask, size_mask*sizeof(unsigned char));
     cudaMalloc((void**)&d_output,size_gpu_output*sizeof(unsigned char));
     //cudaMalloc((void**)&d_res, size_res*sizeof(unsigned char));
-
+    cout << "hello3\n";
 
     cudaMemcpy(d_mapping, mapping, sizeof(int)*n, cudaMemcpyHostToDevice);
     cudaMemcpy(d_input, gpu_input, sizeof(unsigned char)* size_gpu_input, cudaMemcpyHostToDevice);
     cudaMemcpy(d_mask, mask, sizeof(unsigned char)*size_mask, cudaMemcpyHostToDevice);
 
     //cudaMemcpy(d_res, res, sizeof(unsigned char)*size_res, cudaMemcpyHostToDevice);
-
+    cout << "hello4\n";
     int threadsPerBlock = 512;
     int numBlocks = (n+threadsPerBlock-1)/threadsPerBlock;
     //cout << rows_res << '\t' << size_mask << '\t' << threadsPerBlock << '\t' << numBlocks << endl;
-    unfoldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_mask, d_output);
-
+    int size_andres = gap_size * 2 * size_mask + gap_size + 1 + 1024;
+    unfoldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_mask, d_output, n, size_andres);
+    cout << "hello5\n";
     cudaMemcpy(gpu_output, d_output, size_gpu_output*sizeof(unsigned char), cudaMemcpyDeviceToHost);
+    cout << "hell06\n";
 
     vector<row> gpu_bm;
-    convert_1dimarr_to_bitmat(gpu_output, gpu_bm);
+    convert_1dimarr_to_bitmat(gpu_output, gpu_bm, n, size_andres);
+    cout << "hello7\n";
     test_unfold(out_bm, gpu_bm);
+    cout << "hello8\n";
     /*unsigned char* gpu_mask = (unsigned char*)malloc(size_mask*sizeof(unsigned char));
     for(int i=0;i<size_mask;i++){
         gpu_mask[i] = 0x00;
@@ -719,4 +723,4 @@ int main(int argc, char* argv[]){
     print_mask(gpu_mask,size_mask);*/
 
     return 0;
-}
+};
