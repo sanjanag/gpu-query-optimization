@@ -580,6 +580,25 @@ void test_unfold(vector<row> corr, vector<row> sample){
     return out_size;
 }*/
 
+void convert_1dimarr_to_bitmat(unsigned char* input, vector<row>& bm, int n, int size_andres){
+    int gap_size = sizeof(unsigned char);
+    for(int i=0;i<n;i++){
+        unsigned char* data = input+size_andres*i;
+        unsigned int rowsize;
+        memcpy(&rowsize, data, gap_size);
+        //data += gap_size;
+        int total_cnt = (rowsize-1)/gap_size;
+        bool flag = data[gap_size];
+        if(!flag && total_cnt==n){
+            continue;
+        }
+        unsigned char* rdata = (unsigned char*)malloc(gap_size+1+total_cnt*gap_size);
+        memcpy(rdata, data, (gap_size+1+total_cnt*gap_size));
+        row r = {i,rdata};
+        bm.push_back(r);
+    }
+}
+
 int main(int argc, char* argv[]){
     ifstream in;
     in.open("data.in");
@@ -684,8 +703,9 @@ int main(int argc, char* argv[]){
 
     cudaMemcpy(gpu_output, d_output, size_gpu_output*sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
-    convert_1dimarr_to_bitmat(gpu_output);
-    
+    vector<row> gpu_bm;
+    convert_1dimarr_to_bitmat(gpu_output, gpu_bm);
+    test_unfold(out_bm, gpu_bm);
     /*unsigned char* gpu_mask = (unsigned char*)malloc(size_mask*sizeof(unsigned char));
     for(int i=0;i<size_mask;i++){
         gpu_mask[i] = 0x00;
