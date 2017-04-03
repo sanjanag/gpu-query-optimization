@@ -462,6 +462,38 @@ void test_unfold(vector<row> corr, vector<row> sample){
     cout << "PASS\n";
 }
 
+int get_size_gpu_output(unsigned char* mask, int n){
+    int gap_size = sizeof(unsigned int);
+    int out_size = gap_size+1;
+    bool flag = mask[0] & 0x80;
+    int count = 0;
+    vector<int> v;
+    for(int j=0; j<n; j++){
+        if(mask[j/8] & (0x80 >> (j%8))){
+            if(flag)
+                count++;
+            else{
+                v.push_back(count);
+                flag = 1;
+                count = 1;
+            }
+        }
+        else{
+            if(flag){
+                v.push_back(count);
+                flag=0;
+                count = 1;
+            }
+            else{
+                count++;
+            }
+        }
+    }
+    v.push_back(count);
+    out_size += (gap_size*v.size());    
+    return out_size;
+}
+
 int main(int argc, char* argv[]){
     ifstream in;
     in.open("data.in");
@@ -518,21 +550,16 @@ int main(int argc, char* argv[]){
     
     //TESTER FUNCTION
     test_unfold(out_bm, ubm);
-    //cout << "hello3" << endl;
-    //print_bitmat(bm);
-
-    /*fold_bitmat(bm, mask, size_mask);
-    print_mask(mask,size_mask);
-
+    
     int mapping[n];
-    for(int i=0;i<n;i++)
+    for(int i=0; i<n; i++)
         mapping[i] = i;
 
     int size_gpu_input = get_sizeof_1dimarr(bm);
     unsigned char* gpu_input = (unsigned char*)malloc(size_gpu_input*sizeof(unsigned char));
-    //cout << "done\n";
     convert_bitmat_to_1dimarr(bm, mapping, n, gpu_input);
-    //cout << "done\n";
+
+    int size_gpu_output =  get_size_gpu_output(mask, n);
     int split = 8;
     int rows_res = (n+split-1)/split;
     int size_res = rows_res*size_mask;
@@ -545,8 +572,6 @@ int main(int argc, char* argv[]){
             res[i*size_mask+j] = 0x00;
     }
     
-    //cout << "done\n";
-
 
     cudaMalloc((void**)&d_mapping, sizeof(int)*n);
     cudaMalloc((void**)&d_input, size_gpu_input*sizeof(unsigned char));
