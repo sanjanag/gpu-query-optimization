@@ -215,41 +215,127 @@ void convert_bitmat_to_1dimarr(vector<row> bm, int* mapping, int n, unsigned cha
             mapping[i] = -1;
     }
 }
+__global__ void unfoldkernel(int* mapping, unsigned char* input, unsigned char* mask, unsigned char* output, int n, int size_andres){
+    int i = threadIdx.x + blockIdx.x*blockDim.x;
+    if(i<n){
+        if(mapping[i]==-1)
+            return;
+        unsigned char* andres = output + size_andres;
+        int gap_size = sizeof(unsigned int);
+        unsigned int andres_size = 0;
+        unsigned char* data  = input+mapping[i];
+        unsigned int rowsize = 0;
+        memcpy(&rowsize, data, gap_size);
+        data += gap_size;
+        unsigned int cnt = 0, total_cnt = (rowsize-1)/gap_size, tmpcnt = 0, triplecnt = 0,
+                    prev1_bit = 0, prev0_bit = 0, tmpval = 0;
+        bool flag = data[0], begin = true, p1bit_set = false, p0bit_set = false;
 
-/*__global__ void foldkernel(int* mapping, unsigned char* input, unsigned char* res, int n,int size_mask, int split){
-    int threadid = blockIdx.x*blockDim.x+ threadIdx.x;
-    int i = threadid*split;
-    int gap_size = sizeof(unsigned int);
-    
-    for(int k = 0; k < split; k++){
-        int rowid = i+k;
-        if(rowid >= n)
-            break;
-        if(mapping[rowid]==-1)
-            continue;
-        unsigned char* data = input+mapping[rowid];
-        int size;
-        memcpy(&size, data, gap_size);
-        int nums = (size-1)/gap_size;
-        int count=0;
-        data+=gap_size;
-        bool flag = *data;
-        data++;
-        for(int i=0;i<nums;i++){
-            int tmp;
-            memcpy(&tmp, data, gap_size);
-            data+=gap_size;
+        while(cnt < total_cnt){
+            memcpy(&tmpcnt, &data[cnt*gap_size+1], gap_size);
+
             if(flag){
-                for(int pos=count;pos <(count+tmp);pos++){
-                    res[threadid*size_mask +  pos/8] |= (0x80 >> (pos%8));
+                for(unsigned int i = triplecnt; i < triplecnt + tmpcnt; i++){
+                    if((mask[i/8] & (0x80 >> (i%8))) == 0x00){
+                        if(begin){
+                            begin = false;
+                            andres[gap_size] = 0x00;
+                            andres_size = gap_size + 1;
+                            p0bit_set = true;
+                        }
+                        else{
+                            if(!p0bit_set){
+                                memcpy(&andres[andres_size], &i, gap_size);
+                                andres_size += gap_size;
+                                p0bit_set = true;
+                            }
+                            else if(prev0_bit != (i-1)){
+                                tmpval = i - prev0_bit - 1;
+                                memcpy(&andres[andres_size], &tmpval, gap_size);
+                                andres_size += gap_size;
+                            }
+                        }
+                        prev0_bit = i;
+                    }
+                    else if(mask[i/8] & (0x80 >> (i%8))){
+                        if(begin){
+                            begin = false;
+                            andres[gap_size] = 0x80;
+                            andres_size = gap_size + 1;
+                            p1bit_set = true;
+                        }
+                        else{
+                            if(!p1bit_set){
+                                memcpy(&andres[andres_size], &i, gap_size);
+                                andres_size += gap_size;
+                                p1bit_set = true;
+                            }
+                            else if(prev1_bit != (i-1)){
+                                tmpval = i - prev1_bit - 1;
+                                memcpy(&andres[andres_size], &tmpval, gap_size);
+                                andres_size += gap_size;
+                            }
+                        }
+                        prev1_bit = i;
+                    }
                 }
             }
-            count+=tmp;
+            else{
+                if(begin){
+                    begin = false;
+                    andres[gap_size] = 0x00;
+                    andres_size = gap_size+1;
+                    p0bit_set = true;
+                }
+                else{
+                    if(!p0bit_set){
+                        tmpval = prev1_bit + 1;
+                        memcpy(&andres[andres_size], &tmpval, gap_size);
+                        andres_size += gap_size;
+                        p0bit_set = true;
+                    }
+                    else if(prev0_bit != (triplecnt-1)){
+                        tmpval = triplecnt -prev0_bit - 1;
+                        memcpy(&andres[andres_size], &tmpval, gap_size);
+                        andres_size += gap_size;
+                    }
+                }
+                prev0_bit = triplecnt + tmpcnt - 1;
+            }
+
+            
             flag = !flag;
+            cnt++;
+            triplecnt += tmpcnt;
+
         }
-    }
+        if(prev1_bit > prev0_bit){
+            if(!p0bit_set){
+                tmpval = prev1_bit + 1;
+                memcpy(&andres[andres_size], &tmpval, gap_size);
+            }
+            else{
+                tmpval = prev1_bit - prev0_bit;
+                memcpy(&andres[andres_size], &tmpval, gap_size);
+            }
+            andres_size +=  gap_size;
+        }
+        else{
+            if(!p1bit_set){
+                tmpval = prev0_bit + 1;
+                memcpy(&andres[andres_size], &tmpval, gap_size);                
+            }
+            else{
+                tmpval = prev0_bit - prev1_bit;
+                memcpy(&andres[andres_size], &tmpval, gap_size);
+            }
+            andres_size += gap_size;
+        }
+
+        tmpval = andres_size - gap_size;
+        memcpy(andres, &tmpval, gap_size);
+    }    
 }
-*/
 
 void get_mask(unsigned char* mask, bool* raw_mask, int size_mask, int n){
     for(int i=0;i<n;i++){
@@ -462,7 +548,7 @@ void test_unfold(vector<row> corr, vector<row> sample){
     cout << "PASS\n";
 }
 
-int get_size_gpu_output(unsigned char* mask, int n){
+/*int get_size_gpu_output(unsigned char* mask, int n){
     int gap_size = sizeof(unsigned int);
     int out_size = gap_size+1;
     bool flag = mask[0] & 0x80;
@@ -492,7 +578,7 @@ int get_size_gpu_output(unsigned char* mask, int n){
     v.push_back(count);
     out_size += (gap_size*v.size());    
     return out_size;
-}
+}*/
 
 int main(int argc, char* argv[]){
     ifstream in;
@@ -559,37 +645,48 @@ int main(int argc, char* argv[]){
     unsigned char* gpu_input = (unsigned char*)malloc(size_gpu_input*sizeof(unsigned char));
     convert_bitmat_to_1dimarr(bm, mapping, n, gpu_input);
 
-    int size_gpu_output =  get_size_gpu_output(mask, n);
-    int split = 8;
-    int rows_res = (n+split-1)/split;
-    int size_res = rows_res*size_mask;
+    int size_gpu_output =  (gap_size * 2 * size_mask + gap_size + 1 + 1024)*n;
+    unsigned char* gpu_output = (unsigned char*)malloc(size_gpu_output*sizeof(unsigned char));
+    for(int i=0;i<size_gpu_output ;i++)
+        gpu_output[i] = 0x00;
+    //int split = 8;
+    /*int rows_res = (n+split-1)/split;
+    int size_res = rows_res*size_mask;*/
     int* d_mapping;
     unsigned char* d_input;
-    unsigned char* d_res;
-    unsigned char* res = (unsigned char*)malloc(size_res*sizeof(unsigned char));
-    for(int i=0; i<rows_res; i++){
-        for(int j=0;j<size_mask;j++)
+    unsigned char* d_mask;
+    unsigned char* d_output;
+    //unsigned char* d_res;
+    //unsigned char* res = (unsigned char*)malloc(size_res*sizeof(unsigned char));
+    /*for(int i=0; i<rows_res; i++){
+        for(int j=0;j<size_mask;j++)    
             res[i*size_mask+j] = 0x00;
     }
-    
+    */
 
     cudaMalloc((void**)&d_mapping, sizeof(int)*n);
     cudaMalloc((void**)&d_input, size_gpu_input*sizeof(unsigned char));
-    cudaMalloc((void**)&d_res, size_res*sizeof(unsigned char));
+    cudaMalloc((void**)&d_mask, size_mask*sizeof(unsigned char));
+    cudaMalloc((void**)&d_output,size_gpu_output*sizeof(unsigned char));
+    //cudaMalloc((void**)&d_res, size_res*sizeof(unsigned char));
 
 
     cudaMemcpy(d_mapping, mapping, sizeof(int)*n, cudaMemcpyHostToDevice);
     cudaMemcpy(d_input, gpu_input, sizeof(unsigned char)* size_gpu_input, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_res, res, sizeof(unsigned char)*size_res, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_mask, mask, sizeof(unsigned char)*size_mask, cudaMemcpyHostToDevice);
+
+    //cudaMemcpy(d_res, res, sizeof(unsigned char)*size_res, cudaMemcpyHostToDevice);
 
     int threadsPerBlock = 512;
-    int numBlocks = (rows_res+threadsPerBlock-1)/threadsPerBlock;
+    int numBlocks = (n+threadsPerBlock-1)/threadsPerBlock;
     //cout << rows_res << '\t' << size_mask << '\t' << threadsPerBlock << '\t' << numBlocks << endl;
-    foldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_res, n, size_mask, split);
+    unfoldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_mask, d_output);
 
-    cudaMemcpy(res, d_res, size_res*sizeof(unsigned char), cudaMemcpyDeviceToHost);
+    cudaMemcpy(gpu_output, d_output, size_gpu_output*sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
-    unsigned char* gpu_mask = (unsigned char*)malloc(size_mask*sizeof(unsigned char));
+    convert_1dimarr_to_bitmat(gpu_output);
+    
+    /*unsigned char* gpu_mask = (unsigned char*)malloc(size_mask*sizeof(unsigned char));
     for(int i=0;i<size_mask;i++){
         gpu_mask[i] = 0x00;
     }
