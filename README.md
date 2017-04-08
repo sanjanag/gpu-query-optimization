@@ -32,3 +32,5 @@ nvcc unfold.cu
 
 * In case, it shows 'nvcc not installed' run the following command:
 ```export PATH=/usr/local/cuda-8.0/bin${PATH:+:${PATH}} - See more at: http://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#post-installation-actions```
+* For using memcpy inside kernel use the following command:
+```nvcc -Xptxas="-v" -arch=sm_20 -c gpu_unfold.cu```
