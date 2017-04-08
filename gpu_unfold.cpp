@@ -215,24 +215,36 @@ void convert_bitmat_to_1dimarr(vector<row> bm, int* mapping, int n, unsigned cha
             mapping[i] = -1;
     }
 }
+
+__device__ void Memcpy(void* dest, void* src, size_t n){
+    char *csrc = (char *)src;
+    char *cdest = (char *)dest;
+ 
+   // Copy contents of src[] to dest[]
+   for (int i=0; i<n; i++)
+       cdest[i] = csrc[i];
+}
+
 __global__ void unfoldkernel(int* mapping, unsigned char* input, unsigned char* mask, unsigned char* output, int n, int size_andres){
-    int i = threadIdx.x + blockIdx.x*blockDim.x;
-    if(i<n){
-        if(mapping[i]==-1)
+    
+    int row = threadIdx.x + blockIdx.x*blockDim.x;
+    if(row < n){
+        if(mapping[row] == -1)
             return;
         unsigned char* andres = output + size_andres;
         int gap_size = sizeof(unsigned int);
         unsigned int andres_size = 0;
-        unsigned char* data  = input+mapping[i];
+        unsigned char* data  = input+mapping[row];
         unsigned int rowsize = 0;
-        memcpy(&rowsize, data, gap_size);
+        Memcpy(&rowsize, data, gap_size);
+
         data += gap_size;
         unsigned int cnt = 0, total_cnt = (rowsize-1)/gap_size, tmpcnt = 0, triplecnt = 0,
                     prev1_bit = 0, prev0_bit = 0, tmpval = 0;
         bool flag = data[0], begin = true, p1bit_set = false, p0bit_set = false;
 
         while(cnt < total_cnt){
-            memcpy(&tmpcnt, &data[cnt*gap_size+1], gap_size);
+            Memcpy(&tmpcnt, &data[cnt*gap_size+1], gap_size);
 
             if(flag){
                 for(unsigned int i = triplecnt; i < triplecnt + tmpcnt; i++){
@@ -245,13 +257,13 @@ __global__ void unfoldkernel(int* mapping, unsigned char* input, unsigned char* 
                         }
                         else{
                             if(!p0bit_set){
-                                memcpy(&andres[andres_size], &i, gap_size);
+                                Memcpy(&andres[andres_size], &i, gap_size);
                                 andres_size += gap_size;
                                 p0bit_set = true;
                             }
                             else if(prev0_bit != (i-1)){
                                 tmpval = i - prev0_bit - 1;
-                                memcpy(&andres[andres_size], &tmpval, gap_size);
+                                Memcpy(&andres[andres_size], &tmpval, gap_size);
                                 andres_size += gap_size;
                             }
                         }
@@ -266,13 +278,13 @@ __global__ void unfoldkernel(int* mapping, unsigned char* input, unsigned char* 
                         }
                         else{
                             if(!p1bit_set){
-                                memcpy(&andres[andres_size], &i, gap_size);
+                                Memcpy(&andres[andres_size], &i, gap_size);
                                 andres_size += gap_size;
                                 p1bit_set = true;
                             }
                             else if(prev1_bit != (i-1)){
                                 tmpval = i - prev1_bit - 1;
-                                memcpy(&andres[andres_size], &tmpval, gap_size);
+                                Memcpy(&andres[andres_size], &tmpval, gap_size);
                                 andres_size += gap_size;
                             }
                         }
@@ -290,13 +302,13 @@ __global__ void unfoldkernel(int* mapping, unsigned char* input, unsigned char* 
                 else{
                     if(!p0bit_set){
                         tmpval = prev1_bit + 1;
-                        memcpy(&andres[andres_size], &tmpval, gap_size);
+                        Memcpy(&andres[andres_size], &tmpval, gap_size);
                         andres_size += gap_size;
                         p0bit_set = true;
                     }
                     else if(prev0_bit != (triplecnt-1)){
                         tmpval = triplecnt -prev0_bit - 1;
-                        memcpy(&andres[andres_size], &tmpval, gap_size);
+                        Memcpy(&andres[andres_size], &tmpval, gap_size);
                         andres_size += gap_size;
                     }
                 }
@@ -312,28 +324,28 @@ __global__ void unfoldkernel(int* mapping, unsigned char* input, unsigned char* 
         if(prev1_bit > prev0_bit){
             if(!p0bit_set){
                 tmpval = prev1_bit + 1;
-                memcpy(&andres[andres_size], &tmpval, gap_size);
+                Memcpy(&andres[andres_size], &tmpval, gap_size);
             }
             else{
                 tmpval = prev1_bit - prev0_bit;
-                memcpy(&andres[andres_size], &tmpval, gap_size);
+                Memcpy(&andres[andres_size], &tmpval, gap_size);
             }
             andres_size +=  gap_size;
         }
         else{
             if(!p1bit_set){
                 tmpval = prev0_bit + 1;
-                memcpy(&andres[andres_size], &tmpval, gap_size);                
+                Memcpy(&andres[andres_size], &tmpval, gap_size);                
             }
             else{
                 tmpval = prev0_bit - prev1_bit;
-                memcpy(&andres[andres_size], &tmpval, gap_size);
+                Memcpy(&andres[andres_size], &tmpval, gap_size);
             }
             andres_size += gap_size;
         }
 
         tmpval = andres_size - gap_size;
-        memcpy(andres, &tmpval, gap_size);
+        Memcpy(andres, &tmpval, gap_size);
     }    
 }
 
@@ -346,6 +358,7 @@ void get_mask(unsigned char* mask, bool* raw_mask, int size_mask, int n){
 }
 
 void unfold_bitmat(vector<row> bm, unsigned char* mask, int size_mask, vector<row>& ubm){
+    
     int gap_size = sizeof(unsigned int);
     
     //vector<row> ubm;
@@ -546,45 +559,15 @@ void test_unfold(vector<row> corr, vector<row> sample){
     cout << "PASS\n";
 }
 
-/*int get_size_gpu_output(unsigned char* mask, int n){
-    int gap_size = sizeof(unsigned int);
-    int out_size = gap_size+1;
-    bool flag = mask[0] & 0x80;
-    int count = 0;
-    vector<int> v;
-    for(int j=0; j<n; j++){
-        if(mask[j/8] & (0x80 >> (j%8))){
-            if(flag)
-                count++;
-            else{
-                v.push_back(count);
-                flag = 1;
-                count = 1;
-            }
-        }
-        else{
-            if(flag){
-                v.push_back(count);
-                flag=0;
-                count = 1;
-            }
-            else{
-                count++;
-            }
-        }
-    }
-    v.push_back(count);
-    out_size += (gap_size*v.size());    
-    return out_size;
-}*/
 
 void convert_1dimarr_to_bitmat(unsigned char* input, vector<row>& bm, int n, int size_andres){
-    int gap_size = sizeof(unsigned char);
-    for(int i=0;i<n;i++){
+    int gap_size = sizeof(unsigned int);
+    for(int i=0; i<n; i++){
         cout << i << endl;
         unsigned char* data = input+size_andres*i;
         unsigned int rowsize;
         memcpy(&rowsize, data, gap_size);
+        cout << rowsize << endl;
         //data += gap_size;
         int total_cnt = (rowsize-1)/gap_size;
         bool flag = data[gap_size];
@@ -617,6 +600,7 @@ int main(int argc, char* argv[]){
 
     bool raw_out[n*n];
     brute_force_unfold(raw, raw_mask, raw_out, n);
+ 
     vector<pair<bool,vector<unsigned int> > > corr_out(n);
     compress_sparse_bitmat(raw_out, corr_out, n);
     int size_row_bytes = (n%8>0 ? n/8+1 : n/8);
@@ -651,11 +635,11 @@ int main(int argc, char* argv[]){
     //CPU UNFOLD
     vector<row> ubm;
     unfold_bitmat(bm, mask, size_mask, ubm);
+    print_bitmat(ubm);
     
     //TESTER FUNCTION
     test_unfold(out_bm, ubm);
     
-    cout << "hello1\n";    
     int mapping[n];
     for(int i=0; i<n; i++)
         mapping[i] = i;
@@ -668,59 +652,33 @@ int main(int argc, char* argv[]){
     unsigned char* gpu_output = (unsigned char*)malloc(size_gpu_output*sizeof(unsigned char));
     for(int i=0;i<size_gpu_output ;i++)
         gpu_output[i] = 0x00;
-    //int split = 8;
-    /*int rows_res = (n+split-1)/split;
-    int size_res = rows_res*size_mask;*/
+ 
     int* d_mapping;
     unsigned char* d_input;
     unsigned char* d_mask;
     unsigned char* d_output;
-    //unsigned char* d_res;
-    //unsigned char* res = (unsigned char*)malloc(size_res*sizeof(unsigned char));
-    /*for(int i=0; i<rows_res; i++){
-        for(int j=0;j<size_mask;j++)    
-            res[i*size_mask+j] = 0x00;
-    }
-    */
-    cout << "hello2\n";
+ 
     cudaMalloc((void**)&d_mapping, sizeof(int)*n);
     cudaMalloc((void**)&d_input, size_gpu_input*sizeof(unsigned char));
     cudaMalloc((void**)&d_mask, size_mask*sizeof(unsigned char));
     cudaMalloc((void**)&d_output,size_gpu_output*sizeof(unsigned char));
-    //cudaMalloc((void**)&d_res, size_res*sizeof(unsigned char));
-    cout << "hello3\n";
 
     cudaMemcpy(d_mapping, mapping, sizeof(int)*n, cudaMemcpyHostToDevice);
     cudaMemcpy(d_input, gpu_input, sizeof(unsigned char)* size_gpu_input, cudaMemcpyHostToDevice);
     cudaMemcpy(d_mask, mask, sizeof(unsigned char)*size_mask, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_output, gpu_output, sizeof(unsigned char)*size_gpu_output, cudaMemcpyHostToDevice);
 
-    //cudaMemcpy(d_res, res, sizeof(unsigned char)*size_res, cudaMemcpyHostToDevice);
-    cout << "hello4\n";
     int threadsPerBlock = 512;
     int numBlocks = (n+threadsPerBlock-1)/threadsPerBlock;
-    //cout << rows_res << '\t' << size_mask << '\t' << threadsPerBlock << '\t' << numBlocks << endl;
     int size_andres = gap_size * 2 * size_mask + gap_size + 1 + 1024;
     unfoldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_mask, d_output, n, size_andres);
-    cout << "hello5\n";
     cudaMemcpy(gpu_output, d_output, size_gpu_output*sizeof(unsigned char), cudaMemcpyDeviceToHost);
-    cout << "hell06\n";
 
     vector<row> gpu_bm;
     convert_1dimarr_to_bitmat(gpu_output, gpu_bm, n, size_andres);
     cout << "hello7\n";
     test_unfold(out_bm, gpu_bm);
     cout << "hello8\n";
-    /*unsigned char* gpu_mask = (unsigned char*)malloc(size_mask*sizeof(unsigned char));
-    for(int i=0;i<size_mask;i++){
-        gpu_mask[i] = 0x00;
-    }
-
-    for(int i=0;i<rows_res; i++){
-        for(int j=0;j<size_mask;j++){
-            gpu_mask[j] |= res[i*size_mask+j];
-        }
-    }
-    print_mask(gpu_mask,size_mask);*/
-
+    
     return 0;
-};
+}
