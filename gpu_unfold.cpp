@@ -231,7 +231,7 @@ __global__ void unfoldkernel(int* mapping, unsigned char* input, unsigned char* 
     if(row < n){
         if(mapping[row] == -1)
             return;
-        unsigned char* andres = output + size_andres;
+        unsigned char* andres = output + size_andres*row; //grave mistake here
         int gap_size = sizeof(unsigned int);
         unsigned int andres_size = 0;
         unsigned char* data  = input+mapping[row];
@@ -562,16 +562,15 @@ void test_unfold(vector<row> corr, vector<row> sample){
 
 void convert_1dimarr_to_bitmat(unsigned char* input, vector<row>& bm, int n, int size_andres){
     int gap_size = sizeof(unsigned int);
+    
     for(int i=0; i<n; i++){
-        cout << i << endl;
+        //cout << i << endl;
         unsigned char* data = input+size_andres*i;
         unsigned int rowsize;
         memcpy(&rowsize, data, gap_size);
-        cout << rowsize << endl;
-        //data += gap_size;
         int total_cnt = (rowsize-1)/gap_size;
-        bool flag = data[gap_size];
-        if(!flag && total_cnt==n){
+        if(data[gap_size]==0x00 &&  total_cnt==1){
+            //cout << "hi\n";
             continue;
         }
         unsigned char* rdata = (unsigned char*)malloc(gap_size+1+total_cnt*gap_size);
@@ -624,6 +623,7 @@ int main(int argc, char* argv[]){
     //create bitmat
     vector<row> bm;
     get_bitmat(bm, row_bytes,size_row_bytes, comp_mat);
+   // print_bitmat(bm);
     
 
     //CONVERT RAW MASK TO REQUIRED FORMAT
@@ -635,10 +635,12 @@ int main(int argc, char* argv[]){
     //CPU UNFOLD
     vector<row> ubm;
     unfold_bitmat(bm, mask, size_mask, ubm);
-    print_bitmat(ubm);
+    //print_bitmat(ubm);
     
     //TESTER FUNCTION
     test_unfold(out_bm, ubm);
+    //print_bitmat(ubm);
+    //cout << "-----------------------------\n";
     
     int mapping[n];
     for(int i=0; i<n; i++)
@@ -674,11 +676,30 @@ int main(int argc, char* argv[]){
     unfoldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_mask, d_output, n, size_andres);
     cudaMemcpy(gpu_output, d_output, size_gpu_output*sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
+    /*for(int i=0;i<n;i++){
+        unsigned char* data = gpu_output + i*size_andres;
+        unsigned int rowsize;
+        memcpy(&rowsize, data, sizeof(unsigned int));
+        cout << rowsize << endl;
+        data+= gap_size;
+        if(data[0]==0x00)
+            cout << "0" << endl;
+        else if(data[0]==0x80)
+            cout << "1" << endl;
+        else
+            cout << "no flag\n";
+        data++;
+        unsigned int value;
+        memcpy(&value, data, sizeof(unsigned int));
+        cout << value << endl;
+    }
+*/
     vector<row> gpu_bm;
     convert_1dimarr_to_bitmat(gpu_output, gpu_bm, n, size_andres);
-    cout << "hello7\n";
+//    print_bitmat(gpu_bm);
+    //cout << "hello7\n";
     test_unfold(out_bm, gpu_bm);
-    cout << "hello8\n";
+    //cout << "hello8\n";
     
     return 0;
 }
