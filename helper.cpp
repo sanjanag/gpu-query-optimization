@@ -218,6 +218,7 @@ unsigned long count_size_of_bitmat(BitMat *bitmat)
 
 void dgap_uncompress(unsigned char *in, unsigned int insize, unsigned char *out, unsigned int outsize)
 {
+	cout << insize << " " << outsize << endl;
 	unsigned int tmpcnt = 0, bitcnt = 0;
 	unsigned int cnt = 0, total_cnt = 0, bitpos = 0;
 	bool flag;
@@ -277,6 +278,7 @@ void simple_fold(BitMat *bitmat, int ret_dimension, unsigned char *foldarr, unsi
 				unsigned char *data = (*it).data;
 				unsigned rowsize = 0;
 				memcpy(&rowsize, data, ROW_SIZE_BYTES);
+				cout <<  rowsize << endl;
 				//cout << "before dgap_uncompress\n";
 		//		cout << rowsize << " " << foldarr_size << endl;
 				dgap_uncompress(data + ROW_SIZE_BYTES, rowsize, foldarr, foldarr_size);
@@ -298,7 +300,7 @@ unsigned long long int get_sizeof_1dimarr(list<row> bm){
         unsigned char* data = (*it).data;
         unsigned int temp;
         memcpy(&temp, data, ROW_SIZE_BYTES);
-        cout <<"temp: "<<	 temp << endl;
+        //cout <<"temp: "<<	 temp << endl;
         res += temp;
     }
     return res;
@@ -334,29 +336,40 @@ void init_bitmat(BitMat *bitmat, unsigned int snum, unsigned int pnum, unsigned 
 
 }
 
-void convert_bitmat_to_1dimarr(list<row> bm, unsigned long long int int* mapping, int n, unsigned char* gpu_input){
+void convert_bitmat_to_1dimarr(list<row> bm,int* mapping, int n, unsigned char* gpu_input){
     //cout << "hello\n";
     unsigned char* total_data = gpu_input;
     //int gap_size = sizeof(unsigned int);
-    list<row>::iterator it = bm.begin();
-    int j = 0;
-    for(unsigned int i=0; i < n; i++){
-    	assert(it!=bm.end());
-        //cout << i << endl;
+    //list<row>::iterator it = bm.begin();
+    //int j = 0;
+    for(list<row>::iterator it=bm.begin();it!=bm.end();it++){
+    	
         unsigned int rowid = (*it).rowid - 1;
-
-        if(rowid == i){
-            mapping[i] = total_data - gpu_input; 
-            unsigned char* data = (*it).data;
-            unsigned size=0;
-            memcpy(&size, data, ROW_SIZE_BYTES);
-            size += ROW_SIZE_BYTES;
-            memcpy(total_data, data, size);
-            total_data += size;
-            it++;
-        }
-        else
-            mapping[i] = -1;
+        mapping[rowid] = total_data - gpu_input; 
+        unsigned char* data = (*it).data;
+        unsigned size=0;
+        memcpy(&size, data, ROW_SIZE_BYTES);
+        size += ROW_SIZE_BYTES;
+        memcpy(total_data, data, size);
+        total_data += size;
     }
 }
 
+void convert_1dimarr_to_bitmat(unsigned char* input, vector<row>& bm, int n, int size_andres){
+    //int gap_size = sizeof(unsigned int);
+    
+    for(int i=0; i<n; i++){
+        //cout << i << endl;
+        unsigned char* data = input+size_andres*i;
+        unsigned int rowsize;
+        memcpy(&rowsize, data, ROW_SIZE_BYTES);
+        int total_cnt = (rowsize-1)/GAP_SIZE_BYTES;
+        if(data[ROW_SIZE_BYTES]==0x00 &&  total_cnt==1){
+            continue;
+        }
+        unsigned char* rdata = (unsigned char*)malloc(ROW_SIZE_BYTES + 1 + total_cnt*GAP_SIZE_BYTES);
+        memcpy(rdata, data, (ROW_SIZE_BYTES + 1 + total_cnt*GAP_SIZE_BYTES));
+        row r = {i,rdata};
+        bm.push_back(r);
+    }
+}

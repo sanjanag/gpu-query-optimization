@@ -137,5 +137,6 @@ void init_bitmat(BitMat *bitmat, unsigned int snum, unsigned int pnum, unsigned 
 unsigned int count_subject_bytes(unsigned char* data);
 unsigned long count_size_of_bitmat(BitMat *bitmat);
 unsigned long long int get_sizeof_1dimarr(list<row> bm);
-
+void convert_1dimarr_to_bitmat(unsigned char* input, list<row>& bm, int n, int size_andres);
+void convert_bitmat_to_1dimarr(list<row> bm,int* mapping, int n, unsigned char* gpu_input);
 #endif
