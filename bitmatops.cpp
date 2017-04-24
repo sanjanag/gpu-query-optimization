@@ -27,6 +27,9 @@
 
 #include "bitmat.hpp"
 
+unsigned int gnum_subs=29747387, gnum_preds=57453, gnum_objs=153561757, gnum_comm_so=27116793, table_col_bytes=5;
+unsigned int comp_folded_arr=1;
+set<string> null_perm;
 unsigned char *grow;
 unsigned int grow_size;
 unsigned char *comp_subfold;
@@ -38,10 +41,10 @@ unsigned int gmaxrowsize;
 unsigned long gtotal_size;
 unsigned int gtotal_triples;
 unsigned int prev_bitset, prev_rowbit;
-unsigned int table_col_bytes;
+/*unsigned int table_col_bytes;*/
 unsigned char *distresult;
 unsigned long distresult_size;
-ResultSet resset;
+/*ResultSet resset;*/
 map<string, char *> mmap_table;
 vector< pair<int, off64_t> > vectfd(8);
 char buf_tmp[0xf000000];
@@ -1796,11 +1799,14 @@ void simple_fold(BitMat *bitmat, int ret_dimension, unsigned char *foldarr, unsi
 			assert(foldarr_size == bitmat->object_bytes);
 			memcpy(foldarr, bitmat->objfold, bitmat->object_bytes);
 		} else {
+			//int counter = 0;
 			for (std::list<struct row>::iterator it = bitmat->bm.begin(); it != bitmat->bm.end(); it++) {
+			/*	cout << counter << endl;
+				counter++;*/
 				unsigned char *data = (*it).data;
 				unsigned rowsize = 0;
 				memcpy(&rowsize, data, ROW_SIZE_BYTES);
-
+				cout << rowsize << endl;
 				dgap_uncompress(data + ROW_SIZE_BYTES, rowsize, foldarr, foldarr_size);
 
 			}
@@ -1887,7 +1893,7 @@ void simple_unfold(BitMat *bitmat, unsigned char *maskarr, unsigned int maskarr_
 		if (maskarr_size == 0) {
 			printf("simple_unfold: maskarr_size is 0\n");
 			for (std::list<struct row>::iterator it = bitmat->bm.begin(); it != bitmat->bm.end(); ) {
-			1	unsigned char *data  = (*it).data;
+				unsigned char *data  = (*it).data;
 				free(data);
 				it = bitmat->bm.erase(it);
 			}
@@ -2763,7 +2769,7 @@ void check_set_pos_and_proceed(struct node **bfsarr, struct triple t, FILE *outf
 				rowid = t.obj;
 				columnid = t.sub;
 			} else {
-				cout << tp->toString() << endl;
+/*				cout << tp->toString() << endl;*/
 				assert(0);
 //				bool atleastone = false;
 //				for (vector<struct row>::iterator rowitr = bitmat->vbm.begin(); rowitr != bitmat->vbm.end(); rowitr++) {
@@ -2847,7 +2853,7 @@ void check_set_pos_and_proceed(struct node **bfsarr, struct triple t, FILE *outf
 				rowid = t.sub;
 				columnid = t.obj;
 			} else {
-				cout << tp->toString() << endl;
+/*				cout << tp->toString() << endl;*/
 				assert(0);
 //				bool atleastone = false;
 //				for (vector<struct row>::iterator rowitr = bitmat->vbm.begin(); rowitr != bitmat->vbm.end(); rowitr++) {
@@ -3006,7 +3012,7 @@ void check_set_pos_and_proceed(struct node **bfsarr, struct triple t, FILE *outf
 
 void match_query_graph_new(FILE *outfile, struct node **bfsarr, int sidx, int eidx, char *null_pad_str, bool bestm)
 {
-	if (sidx > eidx) {
+/*	if (sidx > eidx) {
 		print_res(outfile, null_pad_str, bfsarr, bestm);
 		return;
 	}
@@ -3099,7 +3105,7 @@ void match_query_graph_new(FILE *outfile, struct node **bfsarr, int sidx, int ei
 		q_neighbor = q_neighbor->next;
 	}
 
-	check_set_pos_and_proceed(bfsarr, t, outfile, sidx, eidx, null_pad_str, bestm);
+	check_set_pos_and_proceed(bfsarr, t, outfile, sidx, eidx, null_pad_str, bestm);*/
 
 }
 
@@ -3138,7 +3144,7 @@ FILE * print_triples_to_file(unsigned int rownum, unsigned int bmnum, unsigned i
 /////////////////////////////////////////////////////////
 void list_enctrips_bitmat_new(BitMat *bitmat, unsigned int bmnum, vector<twople> &twoplist, FILE *outfile)
 {
-#if USE_MORE_BYTES
+/*#if USE_MORE_BYTES
 	unsigned long opos = 0;
 	unsigned long tmpcnt = 0, bitcnt = 0;
 #else
@@ -3194,7 +3200,7 @@ void list_enctrips_bitmat_new(BitMat *bitmat, unsigned int bmnum, vector<twople>
 			cnt++;
 			flag = !flag;
 		}
-	}
+	}*/
 }
 /////////////////////////////
 void list_enctrips_bitmat2(BitMat *bitmat, unsigned int bmnum, vector<twople> &twoplist, FILE *outfile)
@@ -3264,13 +3270,27 @@ void list_enctrips_bitmat2(BitMat *bitmat, unsigned int bmnum, vector<twople> &t
 
 }
 
-unsigned long get_size_of_bitmat(int dimension, unsigned int node)
+/*int get_sizeof_1dimarr(list<row> bm){
+    int res = 0;
+    //int gap_size = sizeof(unsigned int);
+    for(int i=0; i<bm.size(); i++){
+        res += ROW_SIZE_BYTES;
+        unsigned char* data = bm[i].data;
+        int temp;
+        memcpy(&temp, data, GAP_SIZE_BYTES);
+        res += temp;
+    }
+    return res;
+}*/
+
+unsigned long get_size_of_bitmat(int dimension, unsigned int node, char* file)
 {
 	char dumpfile[1024];
+	sprintf(dumpfile, "%s", file);
 	off64_t off1 = 0, off2 = 0;
 	switch (dimension) {
 	case SPO_BITMAT:
-		sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_SPO")].c_str());
+		//sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_SPO")].c_str());
 		off1 = get_offset(dumpfile, node);
 		if (node == gnum_preds) {
 			off2 = vectfd[0].second;
@@ -3280,7 +3300,7 @@ unsigned long get_size_of_bitmat(int dimension, unsigned int node)
 		return (off2 - off1);
 		break;
 	case OPS_BITMAT:
-		sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_OPS")].c_str());
+		//sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_OPS")].c_str());
 		off1 = get_offset(dumpfile, node);
 		if (node == gnum_preds) {
 			off2 = vectfd[2].second;
@@ -3290,7 +3310,7 @@ unsigned long get_size_of_bitmat(int dimension, unsigned int node)
 		return (off2 - off1);
 		break;
 	case PSO_BITMAT:
-		sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_PSO")].c_str());
+		//sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_PSO")].c_str());
 		off1 = get_offset(dumpfile, node);
 		if (node == gnum_subs) {
 			off2 = vectfd[4].second;
@@ -3300,7 +3320,7 @@ unsigned long get_size_of_bitmat(int dimension, unsigned int node)
 		return (off2 - off1);
 		break;
 	case POS_BITMAT:
-		sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_POS")].c_str());
+		//sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_POS")].c_str());
 		off1 = get_offset(dumpfile, node);
 		if (node == gnum_objs) {
 			off2 = vectfd[6].second;
@@ -3329,7 +3349,8 @@ void list_all_data(int dimension, unsigned int node, char *filename)
 	}
 	switch (dimension) {
 		case SPO_BITMAT:
-			sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_SPO")].c_str());
+			//sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_SPO")].c_str());
+			sprintf(dumpfile, "%s", "/work/dataset/dbpedia/all_data_bitmats/dbpedia565m_spo_pdump");
 			init_bitmat(&bitmat, gnum_subs, gnum_preds, gnum_objs, gnum_comm_so, SPO_BITMAT);
 			cout << "Listing triples from SPO bitmats" << endl;
 			if (node != 0) {
@@ -3399,7 +3420,8 @@ void list_all_data(int dimension, unsigned int node, char *filename)
 			break;
 
 		case OPS_BITMAT:
-			sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_OPS")].c_str());
+			//sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_OPS")].c_str());
+			sprintf(dumpfile, "%s", "/work/dataset/dbpedia/all_data_bitmats/dbpedia565m_ops_pdump");
 			init_bitmat(&bitmat, gnum_objs, gnum_preds, gnum_subs, gnum_comm_so, OPS_BITMAT);
 			cout << "Listing triples from OPS bitmats" << endl;
 
@@ -3460,7 +3482,8 @@ void list_all_data(int dimension, unsigned int node, char *filename)
 			break;
 
 		case PSO_BITMAT:
-			sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_PSO")].c_str());
+			//sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_PSO")].c_str());
+			sprintf(dumpfile, "%s", "/work/dataset/dbpedia/all_data_bitmats/dbpedia565m_pso_sdump");
 			init_bitmat(&bitmat, gnum_preds, gnum_subs, gnum_objs, gnum_comm_so, PSO_BITMAT);
 			cout << "Listing triples from PSO bitmats" << endl;
 
@@ -3521,7 +3544,8 @@ void list_all_data(int dimension, unsigned int node, char *filename)
 			break;
 
 		case POS_BITMAT:
-			sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_POS")].c_str());
+			//sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_POS")].c_str());
+			sprintf(dumpfile, "%s", "/work/dataset/dbpedia/all_data_bitmats/dbpedia565m_pos_odump");
 			init_bitmat(&bitmat, gnum_preds, gnum_objs, gnum_subs, gnum_comm_so, POS_BITMAT);
 			cout << "Listing triples from POS bitmats" << endl;
 			if (node != 0) {
@@ -3591,7 +3615,7 @@ void list_all_data(int dimension, unsigned int node, char *filename)
 
 unsigned long list_enctriples_in_bitmat(unsigned char **bitmat, unsigned int dimension, unsigned int num_triples, char *triplefile)
 {
-#if USE_MORE_BYTES
+/*#if USE_MORE_BYTES
 	unsigned long ppos_start_bit, ppos_end_bit, opos = 0;
 	unsigned long tmpcnt = 0, bitcnt = 0, gap;
 	unsigned long triplecnt = 0;
@@ -3713,7 +3737,7 @@ unsigned long list_enctriples_in_bitmat(unsigned char **bitmat, unsigned int dim
 	return triplecnt;
 
 //	printf("Total triples %u\n", num_triples);
-
+*/
 }
 ////////////////////////////////////////////////////////////
 
@@ -3860,7 +3884,7 @@ void load_data_vertically(char *file, vector<struct twople> &twoplelist, BitMat 
 				assert(0);
 
 			if (tmpdump == NULL) {
-				cout << "Cannot open " << config[string("TMP_STORAGE")] << endl;
+				cout << "Cannot open " << /*config[string("TMP_STORAGE")] <<*/ endl;
 				assert(0);
 			}
 		}
@@ -4008,7 +4032,9 @@ void load_data_vertically(char *file, vector<struct twople> &twoplelist, BitMat 
 								tmpdump = NULL;
 							}
 
-							dump_out_data(fdump_fp, bitmat, (char *)config[string("TMP_STORAGE")].c_str());
+							/*dump_out_data(fdump_fp, bitmat, (char *)config[string("TMP_STORAGE")].c_str());*/
+							char tmp_storage[1024] = "/work/tmp/tmpfile";
+							dump_out_data(fdump_fp, bitmat, tmp_storage);
 
 							if (ppos - 1 != pprev) {
 								unsigned long tmpval = 0;
@@ -4025,7 +4051,7 @@ void load_data_vertically(char *file, vector<struct twople> &twoplelist, BitMat 
 									assert(0);
 
 								if (tmpdump == NULL) {
-									cout << "Cannot open " << config[string("TMP_STORAGE")] << endl;
+								//	cout << "Cannot open " << config[string("TMP_STORAGE")] << endl;
 									assert(0);
 								}
 							}
@@ -4081,7 +4107,9 @@ void load_data_vertically(char *file, vector<struct twople> &twoplelist, BitMat 
 				fclose(tmpdump);
 				tmpdump = NULL;
 			}
-			dump_out_data(fdump_fp, bitmat, (char *)config[string("TMP_STORAGE")].c_str());
+			char tmp_storage[1024] = "/work/tmp/tmpfile";
+			dump_out_data(fdump_fp, bitmat, tmp_storage);
+			//dump_out_data(fdump_fp, bitmat, (char *)config[string("TMP_STORAGE")].c_str());
 
 //			if ( (pcnt % 1048576) == 0)
 //				cout << "**** Done with BM num " << pcnt << endl;
@@ -4718,7 +4746,7 @@ unsigned int load_from_dump_file(char *fname_dump, unsigned int bmnum, BitMat *b
 //	char *fpos = NULL;
 
 	assert((readtcnt && readarray) || (!readtcnt && !readarray && ((fd == 0) ^ (NULL == fpos))));
-
+	//cout << "here1\n";
 /* MEDHA: IMPORTANT */
 #if MMAPFILES
 	if (fpos == NULL) {
@@ -4911,15 +4939,16 @@ unsigned int load_from_dump_file(char *fname_dump, unsigned int bmnum, BitMat *b
 				(bitmat->dimension == SPO_BITMAT || bitmat->dimension == OPS_BITMAT)) {
 //			cout << "--------- load_from_dump_file: NOT loading the traditional way" << endl;
 			char dumpfile[1024];
+			//sprintf(dumpfile, "%s", dfile);
 			BitMat bm_tmp;
 			unsigned int add_row_dim = 0;
 			if (bitmat->dimension == SPO_BITMAT) {
-				sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_PSO")].c_str());
+				//sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_PSO")].c_str());
 				shallow_init_bitmat(&bm_tmp, gnum_preds, gnum_subs, gnum_objs, gnum_comm_so, PSO_BITMAT);
 				add_row_dim = PSO_BITMAT;
 
 			} else if (bitmat->dimension == OPS_BITMAT) {
-				sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_POS")].c_str());
+				//sprintf(dumpfile, "%s", (char *)config[string("BITMATDUMPFILE_POS")].c_str());
 				shallow_init_bitmat(&bm_tmp, gnum_preds, gnum_objs, gnum_subs, gnum_comm_so, POS_BITMAT);
 				add_row_dim = POS_BITMAT;
 			}
@@ -5662,7 +5691,7 @@ unsigned long get_offset(char *dumpfile, unsigned int bmnum)
 
 bool mmap_all_files()
 {
-	int fd = 0; off64_t size = 0; char *fstream; char tablefile[1024];
+/*	int fd = 0; off64_t size = 0; char *fstream; char tablefile[1024];
 
 	fd = open((char *)config[string("BITMATDUMPFILE_SPO")].c_str(), O_RDONLY);
 	assert(fd >= 0);
@@ -5729,12 +5758,12 @@ bool mmap_all_files()
 	assert(fstream != (void *)-1);
 	mmap_table[string(tablefile)] = fstream;
 
-	return true;
+	return true;*/
 }
 
 bool munmap_all_files()
 {
-
+/*
 	char tablefile[1024];
 
 	munmap(mmap_table[config[string("BITMATDUMPFILE_SPO")]], vectfd[0].second);
@@ -5761,12 +5790,12 @@ bool munmap_all_files()
 	munmap(mmap_table[string(tablefile)], vectfd[7].second);
 	close(vectfd[7].first);
 
-	return true;
+	return true;*/
 }
 
 void get_all_triples_in_query(char *file)
 {
-	vector<twople> twoples;
+/*	vector<twople> twoples;
 	FILE *ftmp = NULL;
 	if (file != NULL)
 		ftmp = fopen(file, "w");
@@ -5845,12 +5874,12 @@ void get_all_triples_in_query(char *file)
 
 	}
 	if (ftmp != NULL)
-		fclose(ftmp);
+		fclose(ftmp);*/
 
 }
 void get_all_triples_in_query2(char *file)
 {
-	FILE *ftmp = NULL;
+/*	FILE *ftmp = NULL;
 	if (file != NULL)
 		ftmp = fopen(file, "w");
 
@@ -5937,7 +5966,7 @@ void get_all_triples_in_query2(char *file)
 	}
 
 	if (ftmp != NULL)
-		fclose(ftmp);
+		fclose(ftmp);*/
 }
 
 void print_stats(char *fname_dump, unsigned int numbms, bool compfold, unsigned int numsubs, unsigned int numobjs)
@@ -6018,7 +6047,7 @@ void print_stats(char *fname_dump, unsigned int numbms, bool compfold, unsigned 
 
 unsigned int count_intersect(unsigned int bm1, unsigned int bm2)
 {
-	BitMat bitmat_spo1;
+/*	BitMat bitmat_spo1;
 	init_bitmat(&bitmat_spo1, gnum_subs, gnum_preds, gnum_objs, gnum_comm_so, SPO_BITMAT);
 	BitMat bitmat_spo2;
 	init_bitmat(&bitmat_spo2, gnum_subs, gnum_preds, gnum_objs, gnum_comm_so, SPO_BITMAT);
@@ -6060,12 +6089,12 @@ unsigned int count_intersect(unsigned int bm1, unsigned int bm2)
 
 	res[bitmat_spo1.common_so_bytes-1] &= (0xff << (8-(bitmat_spo1.num_comm_so%8)));
 
-	return count_bits_in_row(res, bitmat_spo1.common_so_bytes);
+	return count_bits_in_row(res, bitmat_spo1.common_so_bytes);*/
 }
 
 unsigned int count_intersect_ss(unsigned int bm1, unsigned int bm2)
 {
-	BitMat bitmat_spo1;
+/*	BitMat bitmat_spo1;
 	init_bitmat(&bitmat_spo1, gnum_subs, gnum_preds, gnum_objs, gnum_comm_so, SPO_BITMAT);
 	BitMat bitmat_spo2;
 	init_bitmat(&bitmat_spo2, gnum_subs, gnum_preds, gnum_objs, gnum_comm_so, SPO_BITMAT);
@@ -6098,12 +6127,12 @@ unsigned int count_intersect_ss(unsigned int bm1, unsigned int bm2)
 		res[i] = bitmat_spo1.subfold[i] & bitmat_spo2.subfold[i];
 	}
 
-	return count_bits_in_row(res, bitmat_spo1.subject_bytes);
+	return count_bits_in_row(res, bitmat_spo1.subject_bytes);*/
 }
 
 unsigned int count_intersect_oo(unsigned int bm1, unsigned int bm2)
 {
-	BitMat bitmat_spo1;
+/*	BitMat bitmat_spo1;
 	init_bitmat(&bitmat_spo1, gnum_subs, gnum_preds, gnum_objs, gnum_comm_so, SPO_BITMAT);
 	BitMat bitmat_spo2;
 	init_bitmat(&bitmat_spo2, gnum_subs, gnum_preds, gnum_objs, gnum_comm_so, SPO_BITMAT);
@@ -6143,5 +6172,5 @@ unsigned int count_intersect_oo(unsigned int bm1, unsigned int bm2)
 		res[i] = bitmat_spo1.objfold[i] & bitmat_spo2.objfold[i];
 	}
 
-	return count_bits_in_row(res, bitmat_spo1.object_bytes);
+	return count_bits_in_row(res, bitmat_spo1.object_bytes);*/
 }
