@@ -604,4 +604,6 @@ bool slaves_with_more_than_one_jvar();
 unsigned long long int get_size_of_gpu_input(BitMat *bitmat);
 
 void convert_bitmat_to_gpu_input(BitMat* bitmat, unsigned char* gpu_input, int* mapping, unsigned int num_subs);
+
+void test_fold(unsigned char* cpu_fold, unsigned char* gpu_fold, unsigned int mask_size);
 #endif

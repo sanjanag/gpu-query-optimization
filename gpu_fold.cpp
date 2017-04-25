@@ -1,334 +1,203 @@
-#include <stdio.h>
 #include <iostream>
-#include <fstream>
-#include <stdlib.h>
-#include <list>
-#include <cstring>
-#include <vector>
-#include <utility>
+#include <stdio.h>
+#include "bitmat.hpp"
+#include <sys/time.h>
+#include <math.h>
 #include <cuda.h>
 
 using namespace std;
 
-struct row {
-	unsigned int rowid; //nodeid from the orig graph
-	unsigned char *data;
-	bool operator<(const struct row &a) const
-	{
-		return (this->rowid < a.rowid);
-	}
-};
-
-void get_row_bytes(vector<pair<bool,vector<unsigned int> > > comp_mat, int n, unsigned char* row_bytes){
-    for(int i=0; i<n; i++){
-        int idx = i/8;
-        int pos = i%8;
-
-        if(comp_mat[i].first || comp_mat[i].second[0]<n){
-            row_bytes[idx] |= (0x80 >> pos);
-        }
-    }
+__device__ void Memcpy(void* dest, void* src, size_t n){
+    char *csrc = (char *)src;
+    char *cdest = (char *)dest;
+ 
+   // Copy contents of src[] to dest[]
+   for (int i=0; i<n; i++)
+       cdest[i] = csrc[i];
 }
 
-void get_bitmat(vector<row>& bm, unsigned char* row_bytes, int size_row_bytes, vector<pair<bool,vector<unsigned int> > > comp_mat){
-    int rownum=0;
 
-    for(int i=0; i<size_row_bytes; i++){
-        if(row_bytes[i]==0x00){
-            rownum += 8;
+__global__ void foldkernel(int* mapping, unsigned char* input, unsigned char* partial, unsigned int num_subs, unsigned int mask_size, unsigned int split){
+	unsigned int gap_size = 4;
+	unsigned int row_size = 4;
+
+    unsigned int threadid = blockIdx.x * blockDim.x+ threadIdx.x;
+    
+    unsigned int start_row = threadid * split;
+    //int gap_size = sizeof(unsigned int);
+    
+    for(unsigned int k = start_row; k < (split+start_row); k++){
+        unsigned int rowid = k;
+        if(rowid >= num_subs)
+            break;
+
+        if(mapping[rowid] == -1)
+            continue;
+
+        unsigned char* data = input + mapping[rowid];
+        
+        unsigned int rowsize=0;
+
+        Memcpy(&rowsize, data, row_size);
+
+        data += row_size;
+
+        unsigned int total_cnt = (rowsize-1)/gap_size, cnt = 0, tmpcnt = 0, bitpos = 0, bitcnt = 0;
+        
+        bool flag = data[0] & 0x01;
+        
+        unsigned char format = data[0] & 0x02;
+
+        data++;
+
+        while(cnt < total_cnt){
+        	
+        	Memcpy(&tmpcnt, &data[cnt*gap_size], gap_size);
+
+        	if(format == 0x02){
+        		partial[threadid*mask_size + (tmpcnt-1)/8] |= (0x80 >> ((tmpcnt-1)%8));
+        	}
+        	else{
+        		if(flag){
+        			for (bitpos = bitcnt; bitpos < bitcnt+tmpcnt; bitpos++) {
+						partial[threadid*mask_size + bitpos/8] |= (0x80 >> (bitpos % 8));
+					}
+        		}
+        	}
+        	cnt++;
+        	flag = !flag;
+        	bitcnt += tmpcnt;
+        }
+
+        if(format == 0x02){
+        	assert((tmpcnt-1)/8 < mask_size);
         }
         else{
-            for(int j=0;j<8;j++){
-                if(row_bytes[i] & (0x80 >> j)){
-                    bool start = comp_mat[rownum].first;
-                    vector<unsigned int> comp_row = comp_mat[rownum].second;
-
-                    int gap_size = sizeof(unsigned int);
-                    int size = comp_row.size()*gap_size+1;
-                    unsigned char* data = (unsigned char*)malloc(size+gap_size);
-
-                    memcpy(data, &size, gap_size);
-
-                    unsigned char* curr = data+gap_size;
-
-                    *curr = (start ? 0x80 : 0x00);
-                    curr++;
-
-                    for(int k=0;k<comp_row.size();k++){
-                        unsigned int tmp = comp_row[k];
-                        memcpy(curr, &tmp, gap_size);
-                        curr+=gap_size;
-                    }
-
-                    row r = {rownum,data};
-                    bm.push_back(r);
-                }
-                rownum++;
-            }
+        	assert((bitcnt-1)/8 < mask_size);
         }
     }
 }
 
-void compress_sparse_bitmat(bool* raw, vector<pair<bool,vector<unsigned int> > >& comp_mat, int n){
-    for(int i=0;i<n;i++){
-        bool flag = raw[i*n];
-        comp_mat[i].first = flag;
-        int count = 0;
-        vector<unsigned int> v;
-        for(int j=0;j<n;j++){
-            if(raw[i*n+j]){
-                if(flag)
-                    count++;
-                else{
-                    v.push_back(count);
-                    flag =1;
-                    count = 1;
-                }
-            }
-            else{
-                if(flag){
-                    v.push_back(count);
-                    flag=0;
-                    count = 1;
-                }
-                else
-                    count++;
-            }
-        }
-        v.push_back(count);
-        comp_mat[i].second = v;
-        v.clear();
-    }
-}
-
-void print(bool* mat, int n){
-    for(int i=0;i<n;i++){
-        for(int j=0;j<n;j++)
-            printf("%d ",mat[i*n+j]);
-        cout << endl;
-    }
-}
-
-void print_comp_mat(vector<pair<bool,vector<unsigned int> > > comp_mat, int n){
-    for(int i=0;i<n;i++){
-        cout << comp_mat[i].first << endl;
-        for(int j=0;j<comp_mat[i].second.size();j++)
-            printf("%d ",comp_mat[i].second[j]);
-        cout << endl;
-    }
-}
-
-void print_bitmat(list<row> bm){
-    int n=bm.size();
-    for(list<row>::iterator it=bm.begin(); it!=bm.end(); it++){
-        cout <<"rowid: " <<  (*it).rowid << endl;
-        unsigned char* data = (*it).data;
-        int size;
-        memcpy(&size,data,sizeof(unsigned int));
-        cout <<"size: "<< size << endl;
-        data+=sizeof(unsigned int);
-        printf("flag: %d\n",*data);
-        data++;
-        for(int j=0;j<((size-1)/sizeof(unsigned int)); j++){
-            int tmp;
-            memcpy(&tmp, data, sizeof(unsigned int));
-            printf("%d ",tmp);
-            data+=sizeof(unsigned int);
-        }
-        cout << endl;
-    }
-}
-
-void print_mask(unsigned char* mask, int size){
-    for(int i=0;i<size;i++)
-        printf("%d ",mask[i]);
-    cout << endl;
-}
-
-void fold_bitmat(vector<row> bm, unsigned char* mask, int size_mask){
-    //print_mask(mask,size_mask);
-    int n = bm.size();
-    int gap_size = sizeof(unsigned int);
-    for(vector<row>::iterator it=bm.begin(); it!=bm.end(); it++){
-        unsigned char* data=(*it).data;
-        int size;
-        memcpy(&size, data, gap_size);
-        int nums = (size-1)/gap_size;
-        int count=0;
-        data+=gap_size;
-        bool flag = *data;
-        data++;
-        for(int i=0;i<nums;i++){
-            int tmp;
-            memcpy(&tmp, data, gap_size);
-            data+=gap_size;
-            if(flag){
-                for(int pos=count;pos <(count+tmp);pos++){
-                    mask[pos/8] |= (0x80 >> (pos%8));
-                }
-            }
-            count+=tmp;
-            flag = !flag;
-        }
-        //print_mask(mask,size_mask);
-    }
-}
-
-int get_sizeof_1dimarr(vector<row> bm){
-    int res = 0;
-    int gap_size = sizeof(unsigned int);
-    for(int i=0; i<bm.size(); i++){
-        res += gap_size;
-        unsigned char* data = bm[i].data;
-        int temp;
-        memcpy(&temp, data, gap_size);
-        res += temp;
-    }
-    return res;
-}
-
-void convert_bitmat_to_1dimarr(vector<row> bm, int* mapping, int n, unsigned char* gpu_input){
-    //cout << "hello\n";
-    unsigned char* total_data = gpu_input;
-    int gap_size = sizeof(unsigned int);
-    int j = 0;
-    for(int i=0; i < n; i++){
-        //cout << i << endl;
-        int rowid = bm[j].rowid;
-
-        if(rowid == i){
-            mapping[i] = total_data - gpu_input; 
-            unsigned char* data = bm[j].data;
-            int size;
-            memcpy(&size, data, gap_size);
-            size += gap_size;
-            memcpy(total_data, data, size);
-            total_data += size;
-            j++;
-        }
-        else
-            mapping[i] = -1;
-    }
-}
-
-__global__ void foldkernel(int* mapping, unsigned char* input, unsigned char* res, int n,int size_mask, int split){
-    int threadid = blockIdx.x*blockDim.x+ threadIdx.x;
-    int i = threadid*split;
-    int gap_size = sizeof(unsigned int);
-    
-    for(int k = 0; k < split; k++){
-        int rowid = i+k;
-        if(rowid >= n)
-            break;
-        if(mapping[rowid]==-1)
-            continue;
-        unsigned char* data = input+mapping[rowid];
-        int size;
-        memcpy(&size, data, gap_size);
-        int nums = (size-1)/gap_size;
-        int count=0;
-        data+=gap_size;
-        bool flag = *data;
-        data++;
-        for(int i=0;i<nums;i++){
-            int tmp;
-            memcpy(&tmp, data, gap_size);
-            data+=gap_size;
-            if(flag){
-                for(int pos=count;pos <(count+tmp);pos++){
-                    res[threadid*size_mask +  pos/8] |= (0x80 >> (pos%8));
-                }
-            }
-            count+=tmp;
-            flag = !flag;
-        }
-    }
-}
+/*void test_fold(unsigned char* cpu_fold, unsigned char* gpu_fold, unsigned int mask_size){
+	if(mask_size > 0){
+		for(unsigned int i=0; i<mask_size; i++){
+			if(cpu_fold[i] != gpu_fold[i]){
+				cout << i << " FAIL\n";
+				return;
+			}
+		}
+	}
+	cout << "PASS\n";
+}*/
 
 int main(int argc, char* argv[]){
-    ifstream in;
-    in.open("data.in");
-    int n=atoi(argv[1]);
-    bool raw[n*n];
+	cout << "Hello World!\n";
 
-    //read sparse matrix from raw file
-    for(int i=0;i<n;i++){
-        for(int j=0;j<n;j++)
-            in >> raw[i*n+j];
-    }
-    //print(raw,n);
-    //compress sparse raw matrix
-    vector<pair<bool,vector<unsigned int> > > comp_mat(n);
-    compress_sparse_bitmat(raw,comp_mat,n);
+	BitMat* bitmat = new BitMat;
+	char dumpfile[1024] = "/data/gpuuser1/gpu_query_opt/dump/dbpedia565m_spo_pdump";
 
-    //create row_bytes array
-    int size_row_bytes = (n%8>0 ? n/8+1 : n/8);
-    unsigned char* row_bytes = (unsigned char*)malloc(size_row_bytes*sizeof(unsigned char));
-    memset(row_bytes,0,size_row_bytes);
-    get_row_bytes(comp_mat, n, row_bytes);
-
-    //create bitmat
-    vector<row> bm;
-    get_bitmat(bm, row_bytes,size_row_bytes, comp_mat);
-    //print_bitmat(bm);
+	init_bitmat(bitmat, gnum_subs, gnum_preds, gnum_objs, gnum_comm_so, SPO_BITMAT);
+	unsigned int node = atoi(argv[1]);
+	unsigned int ratio = atoi(argv[2]);
+	unsigned int triples =  load_from_dump_file(dumpfile, node, bitmat, true, true, NULL, 0, 0, NULL, 0, true);
+	
+	cout << node << " " << bitmat->bm.size() << endl;	
+	
+	
+	struct timeval t1, t2;
+    double elapsedTime;
     
-    int size_mask = (n%8>0 ? n/8+1 : n/8);
-    unsigned char* mask = (unsigned char*)malloc(sizeof(unsigned char)*size_mask);
-    memset(mask,0,size_mask);
-    fold_bitmat(bm, mask, size_mask);
-    print_mask(mask,size_mask);
+    gettimeofday(&t1, NULL);
 
-    int mapping[n];
-    for(int i=0;i<n;i++)
-        mapping[i] = i;
-
-    int size_gpu_input = get_sizeof_1dimarr(bm);
-    unsigned char* gpu_input = (unsigned char*)malloc(size_gpu_input*sizeof(unsigned char));
-    //cout << "done\n";
-    convert_bitmat_to_1dimarr(bm, mapping, n, gpu_input);
-    //cout << "done\n";
-    int split = 8;
-    int rows_res = (n+split-1)/split;
-    int size_res = rows_res*size_mask;
-    int* d_mapping;
-    unsigned char* d_input;
-    unsigned char* d_res;
-    unsigned char* res = (unsigned char*)malloc(size_res*sizeof(unsigned char));
-    for(int i=0; i<rows_res; i++){
-        for(int j=0;j<size_mask;j++)
-            res[i*size_mask+j] = 0x00;
-    }
+	simple_fold(bitmat, COLUMN, bitmat->objfold, bitmat->object_bytes);
+	
+	gettimeofday(&t2, NULL);
     
-    //cout << "done\n";
+    elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
+    elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
+    cout << elapsedTime << " ms.\n";	
+	
+    int* mapping = new int[gnum_subs];
 
 
-    cudaMalloc((void**)&d_mapping, sizeof(int)*n);
-    cudaMalloc((void**)&d_input, size_gpu_input*sizeof(unsigned char));
-    cudaMalloc((void**)&d_res, size_res*sizeof(unsigned char));
+	for(unsigned int i=0; i < gnum_subs; i++){
+		mapping[i] = -1;
+	}
 
+	unsigned long long int gpu_input_size = get_size_of_gpu_input(bitmat);
 
-    cudaMemcpy(d_mapping, mapping, sizeof(int)*n, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_input, gpu_input, sizeof(unsigned char)* size_gpu_input, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_res, res, sizeof(unsigned char)*size_res, cudaMemcpyHostToDevice);
+	unsigned char* gpu_input = (unsigned char*)malloc(gpu_input_size * sizeof(unsigned char));
+	//cout << "here2\n";
+	unsigned int mask_size = bitmat->object_bytes;
 
-    int threadsPerBlock = 512;
-    int numBlocks = (rows_res+threadsPerBlock-1)/threadsPerBlock;
-    //cout << rows_res << '\t' << size_mask << '\t' << threadsPerBlock << '\t' << numBlocks << endl;
-    foldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_res, n, size_mask, split);
+	unsigned int split = gnum_subs/ratio;
 
-    cudaMemcpy(res, d_res, size_res*sizeof(unsigned char), cudaMemcpyDeviceToHost);
+	unsigned int partial_rows = (gnum_subs%split > 0 ? gnum_subs/split + 1 : gnum_subs/split);
 
-    unsigned char* gpu_mask = (unsigned char*)malloc(size_mask*sizeof(unsigned char));
-    for(int i=0;i<size_mask;i++){
-        gpu_mask[i] = 0x00;
+	unsigned int partial_size = partial_rows * mask_size;
+
+	unsigned char* partial = (unsigned char*)malloc(partial_size * sizeof(unsigned char));
+
+	//cout << "here3\n";
+	cout << partial_rows << " " << mask_size << endl;
+	unsigned int i,j;
+
+	/*try{*/
+		for(i = 0; i<partial_rows; i++){
+			for(j=0; j<mask_size; j++)
+				//cout << i << " " << j << endl;
+				partial[i*mask_size + j] = 0x00;
+		}
+	/*}
+	catch(exception& e){
+		cerr << e.what() << endl;
+	}*/
+
+	//cout << "here4\n";
+	unsigned char *d_partial, *d_input;
+
+	int* d_mapping;
+
+	//cout << "here1\n";
+	int threadsPerBlock = 512;
+    int numBlocks = (partial_rows%threadsPerBlock > 0 ? partial_rows/threadsPerBlock + 1 : partial_rows/threadsPerBlock);
+	
+	
+	gettimeofday(&t1, NULL);
+	convert_bitmat_to_gpu_input(bitmat, gpu_input, mapping, gnum_subs);
+
+	cudaMalloc((void**)&d_mapping, gnum_subs * sizeof(int));
+    cudaMalloc((void**)&d_input, gpu_input_size * sizeof(unsigned char));
+    cudaMalloc((void**)&d_partial, partial_size * sizeof(unsigned char));
+
+    cudaMemcpy(d_mapping, mapping, gnum_subs * sizeof(int) , cudaMemcpyHostToDevice);
+    cudaMemcpy(d_input, gpu_input, gpu_input_size * sizeof(unsigned char), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_partial, partial, partial_size * sizeof(unsigned char), cudaMemcpyHostToDevice);
+
+    
+    //gettimeofday(&t2, NULL);
+    
+    foldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_partial, gnum_subs, mask_size, split);
+    
+    cudaMemcpy(partial, d_partial, partial_size * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+
+    unsigned char* gpu_objfold = (unsigned char*)malloc(mask_size * sizeof(unsigned char));
+
+    for(unsigned int i=0; i<mask_size; i++){
+        gpu_objfold[i] = 0x00;
     }
 
-    for(int i=0;i<rows_res; i++){
-        for(int j=0;j<size_mask;j++){
-            gpu_mask[j] |= res[i*size_mask+j];
+    for(unsigned int i=0; i<partial_rows; i++){
+        for(unsigned int j=0; j<mask_size; j++){
+            gpu_objfold[j] |= partial[i*mask_size + j];
         }
     }
-    print_mask(gpu_mask,size_mask);
-
-    return 0;
+    gettimeofday(&t2, NULL);
+    
+    
+    elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
+    elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
+    cout << elapsedTime << " ms.\n";	
+    test_fold(bitmat->objfold, gpu_objfold, mask_size);
+	return 0;
 }
