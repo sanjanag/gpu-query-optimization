@@ -1799,17 +1799,18 @@ void simple_fold(BitMat *bitmat, int ret_dimension, unsigned char *foldarr, unsi
 			assert(foldarr_size == bitmat->object_bytes);
 			memcpy(foldarr, bitmat->objfold, bitmat->object_bytes);
 		} else {
-			//int counter = 0;
+			int counter = 0;
 			for (std::list<struct row>::iterator it = bitmat->bm.begin(); it != bitmat->bm.end(); it++) {
-			/*	cout << counter << endl;
-				counter++;*/
+				
+				counter++;
 				unsigned char *data = (*it).data;
 				unsigned rowsize = 0;
 				memcpy(&rowsize, data, ROW_SIZE_BYTES);
-				cout << rowsize << endl;
+//				cout << rowsize << endl;
 				dgap_uncompress(data + ROW_SIZE_BYTES, rowsize, foldarr, foldarr_size);
 
 			}
+			cout << counter << endl;
 		}
 	} else {
 		cout << "simple_fold: **** ERROR unknown dimension " << ret_dimension << endl;
@@ -6173,4 +6174,31 @@ unsigned int count_intersect_oo(unsigned int bm1, unsigned int bm2)
 	}
 
 	return count_bits_in_row(res, bitmat_spo1.object_bytes);*/
+}
+
+unsigned long long int get_size_of_gpu_input(BitMat *bitmat){
+	unsigned long long int size = 0;
+	if(bitmat->bm.size() > 0){
+		for (list<struct row>::iterator it = bitmat->bm.begin(); it != bitmat->bm.end(); it++) {
+			unsigned int rowsize = 0;
+			memcpy(&rowsize, (*it).data, ROW_SIZE_BYTES);
+			size += rowsize + ROW_SIZE_BYTES;
+		}
+	}
+	return size;
+}
+
+void convert_bitmat_to_gpu_input(BitMat* bitmat, unsigned char* gpu_input, long long int* mapping, unsigned int num_subs){
+	unsigned char* curr_row = gpu_input;
+
+	if(bitmat->bm.size() > 0){
+		for(list<struct row>::iterator it = bitmat->bm.begin(); it != bitmat->bm.end(); it++){
+			unsigned int rowbit = (*it).rowid -1;
+			mapping[rowbit] = curr_row - gpu_input;
+			unsigned int rowsize = 0;
+			memcpy(&rowsize, (*it).data, ROW_SIZE_BYTES);
+			memcpy(curr_row, (*it).data, rowsize + ROW_SIZE_BYTES);
+			curr_row += (rowsize+ROW_SIZE_BYTES);
+		}
+	}
 }
