@@ -602,5 +602,6 @@ bool is_allslave_bottomup_pass(void);
 bool slaves_with_more_than_one_jvar();
 
 unsigned long long int get_size_of_gpu_input(BitMat *bitmat);
-void convert_bitmat_to_gpu_input(BitMat* bitmat, unsigned char* gpu_input, long long int* mapping, unsigned int num_subs);
+
+void convert_bitmat_to_gpu_input(BitMat* bitmat, unsigned char* gpu_input, int* mapping, unsigned int num_subs);
 #endif
