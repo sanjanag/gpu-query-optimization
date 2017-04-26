@@ -38,7 +38,7 @@ Consider an uncompressed bitmat of the following form. Here, the matrix represen
 \end{algorithm}
 
 
-\begin{figure}[h]
+\begin{figure}[ht]
         \includegraphics[width=.5\textwidth]{OR.pdf}
         \caption{In this figure, matrix represents an uncompressed BitMat while the array represents the folded array. }
         \centering
@@ -58,7 +58,7 @@ The unfold operation takes as input a bitmat and a mask array and outputs a bitm
       \caption{CPU\_Fold(input, maskarr, output, n, m)}
 \end{algorithm}
 
-\begin{figure}[h]
+\begin{figure}[ht]
         \includegraphics[width=\textwidth]{AND.pdf}
         \caption{In this figure, matrix represents an uncompressed BitMat while the array represents the mask array. Output is the result of applying unfold operation on input as outlined in the algorithm above}
         \centering
@@ -70,7 +70,7 @@ CUDA is a library developed to exploit the parallelization in GPUs. The architec
 
 In this project, I have used a 1-dimensional indexing for both threads and blocks as the parallelization is only on 1-dimension int the BitMat, either row or column.
 
-\begin{figure}[h]
+\begin{figure}[ht]
         \includegraphics[width=\textwidth]{GPU.pdf}
         \caption{This figure represents the one-dimensional indexing based architecture for both threads and blocks}
         \centering
@@ -93,6 +93,47 @@ Following is the configuration of threads and blocks employed in the project
 
 
 \section*{Parallelized Fold operation}
+\begin{algorithm}[H]
+      \begin{algorithmic}[1]
+      \STATE gpu\_input\_size $\gets$ get\_size\_of\_gpu\_input(bitmat)
+      \STATE split $\gets$ n/num\_chunks
+      \STATE partial\_rows $\gets ((n\%split > 0) ? (n/split + 1) : (n/split))$
+      \STATE partial\_size $\gets$ partial\_rows $*$ mask\_size
+      \STATE memset(partial,$0$,partial\_size)
+      \STATE convert\_bitmat\_to\_gpu\_input(bitmat, gpu\_input, mapping, $n$)
+      \STATE cudaMalloc(d\_mapping, $n *$ sizeof(int))
+      \STATE cudaMalloc(d\_input, gpu\_input\_size $*$ sizeof(unsigned char))
+      \STATE cudaMalloc(d\_partial, partial\_size $*$ sizeof(unsigned char))
+      \STATE cudaMemcpy(d\_mapping, mapping, $n *$ sizeof(int) , cudaMemcpyHostToDevice)
+      \STATE cudaMemcpy(d\_input, gpu\_input, gpu\_input\_size $*$ sizeof(unsigned char), cudaMemcpyHostToDevice)
+      \STATE cudaMemcpy(d\_partial, partial, partial\_size $*$ sizeof(unsigned char), cudaMemcpyHostToDevice)
+      \STATE foldkernel$\lll$numBlocks,threadsPerBlock$\ggg$(d\_mapping, d\_input, d\_partial, n, mask\_size, split)
+      \STATE cudaMemcpy(partial, d\_partial, partial\_size $*$ sizeof(unsigned char), cudaMemcpyDeviceToHost)
+      \STATE memset(foldarr,0,mask\_size)
+      \FOR{$i = 0$ to partial\_rows}
+            \FOR{$j=0$  to mask\_size}
+                \STATE foldarr[$j$] $\gets$ partial[$i*$mask\_size $+j$]
+            \ENDFOR
+      \ENDFOR
+      \end{algorithmic}
+      \caption{GPU\_Fold(bitmat,n,num\_chunks, mask\_size)}
+\end{algorithm}
+
+\begin{algorithm}[H]
+      \begin{algorithmic}[1]
+      \STATE threadid $\gets$ blockIdx.x $*$ blockDim.x $+$ threadIdx.x
+      \STATE start\_row $\gets$ threadid $*$ split
+      \FOR{$k=start\_row; k < start\_row + split; k\texttt{++}$}
+            \IF{$k<n$}
+                \STATE data $\gets$ d\_input $+$ mapping[$k$]
+                \FOR{$j=0; j < mask\_size; j\texttt{++}$}
+                    \STATE partial[$threadid * mask\_size + j$] $\gets $ partial[$threadid * mask\_size + j$] $\mathrel{|}$ data[$j$]
+                \ENDFOR
+            \ENDIF
+      \ENDFOR
+      \end{algorithmic}
+      \caption{foldkernel(d\_mapping, d\_input, d\_partial, n, mask\_size, split))}
+\end{algorithm}
 
 
 \end{document}
