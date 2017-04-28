@@ -10,7 +10,7 @@
 
 \title{GPU based optimizations for large graph adjacency matrices}
 \author{Sanjana Garg, 13617}
-\date{25 April, 2017}
+\date{28 April, 2017}
 
 \begin{document}
 
@@ -176,5 +176,60 @@ Following is the configuration of threads and blocks employed in the project
       \end{algorithmic}
       \caption{unfoldkernel(d\_mapping, d\_input, d\_partial, n, mask\_size, split))}
 \end{algorithm}
+
+The above pseudocodes for Fold and Unfold operation on GPU do not include the complex logic for performing these operations in compressed format. However, the other framework and functions are same. This is done to keep the express the algorithm succinctly excluding the complications of compressed format. The variables used are self-explanatory and may not be declared in the pseudocode to maintain the preciseness. 
+
+\section*{Experiments}
+\begin{figure}[ht]
+        \includegraphics[width=.75\textwidth]{split_vs_gpu_time.png}
+        \caption{GPU operation time vs Number of chunks}
+        \centering
+\end{figure}
+
+It can be observed that changing the number of chunks (threads essentially) causes a very small effect in the time it takes for computation on GPU.
+
+\begin{figure}[ht]
+        \includegraphics[width=.75\textwidth]{gpu_vs_cpu.png}
+        \caption{CPU/GPU time vs size of bitmat}
+        \centering
+\end{figure}
+
+Here, we observe that as the size of bitmat increases CPU time increases linearly whereas GPU time almost stays the same. This can be exploited for more efficient computation as size does not affect the GPU time computation as expected.
+\pagebreak
+\begin{figure}[ht]
+        \includegraphics[width=.75\textwidth]{latency_vs_size.png}
+        \caption{Latency due to data transfer vs size of bitmat}
+        \centering
+\end{figure}
+
+The above plot shows an interesting phenomena. Here, it can be observed that the latency time is almost constant for any size of data. Ideally, with increasing size memory transfer should take larger time. It actually reduces the transfer overhead as apparently the size of the bitmat does not affect it.
+
+\begin{figure}[ht]
+        \includegraphics[width=.75\textwidth]{unfold.png}
+        \caption{GPU/CPU time vs size of matrix}
+        \centering
+\end{figure}
+
+This plot shows the CPU and GPU performance while performing unfold operation. It can be observed that with increasing size of matrix the GPU performs considerably better than CPU.
+\pagebreak
+\begin{figure}[ht]
+        \includegraphics[width=.75\textwidth]{iter_plot.png}
+        \caption{GPU/CPU time vs number of iterations}
+        \centering
+\end{figure}
+
+In the above plot, we observe that once data is there in the GPU memory the unfold operation on GPU takes considerably lesser time with frequent use. The performance difference between the GPU and CPU increases with the number of iterations.
+
+\section*{Contribution}
+One of the major advantages of the above implementation for GPU is that the Fold and Unfold operations are performed in compressed format. This reduces not only the space complexity but as observed while doing operation on simulated data time complexity as well by a great amount.
+
+Another plus point is that the implementation is compatible with the existing code base of BitMat project that performs pattern queries on these bitmats. This was also a major requirement as the existing code base has been perfected for quite a few years and it didn't make sense to rewrite the whole code for an operation. To accomplish this feat the bitmat struct was converted to a one-dimensional array with a mapping maintained as CUDA is too restrictive and doesn't support array of character arrays. In fact, one of the major bottleneck for CUDA implementation was transferring data to GPU memory and yet maintaining the compatibility.
+
+The performance aim has been met in the above implementation especially for the unfold operation. We observe that GPU computation is significantly efficient even for small bitmats while doing unfold operation.
+
+
+\section*{Future work}
+The future work includes restructuring the current code as a library so that it can be imported anywhere in the existing code base. Also, currently the Unfold operation could not be tested on actual dbpedia datasets because of memory issues. So, one of the major extension is a data structure that can function in the given memory constraints and perform computation on GPU.
+
 
 \end{document}

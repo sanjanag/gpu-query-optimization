@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.16 (TeX Live 2015/Debian) (preloaded format=pdflatex 2016.7.28)  27 APR 2017 18:51
+This is pdfTeX, Version 3.14159265-2.6-1.40.16 (TeX Live 2015/Debian) (preloaded format=pdflatex 2016.7.28)  28 APR 2017 11:00
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -627,29 +627,64 @@ Underfull \hbox (badness 10000) in paragraph at lines 156--157
 eadsPerBlock$\U/msa/m/n/10 o$\OT1/cmr/m/n/10 (d[]mapping, d[]input,
  []
 
-[5] [6] (./main.aux) ) 
+[5] [6] <images/split_vs_gpu_time.png, id=139, 864.22874pt x 484.81125pt>
+File: images/split_vs_gpu_time.png Graphic file (type png)
+
+<use images/split_vs_gpu_time.png>
+Package pdftex.def Info: images/split_vs_gpu_time.png used on input line 184.
+(pdftex.def)             Requested size: 258.75pt x 145.14859pt.
+
+<images/gpu_vs_cpu.png, id=141, 864.22874pt x 484.81125pt>
+File: images/gpu_vs_cpu.png Graphic file (type png)
+
+<use images/gpu_vs_cpu.png>
+Package pdftex.def Info: images/gpu_vs_cpu.png used on input line 192.
+(pdftex.def)             Requested size: 258.75pt x 145.14859pt.
+
+<images/latency_vs_size.png, id=142, 864.22874pt x 484.81125pt>
+File: images/latency_vs_size.png Graphic file (type png)
+
+<use images/latency_vs_size.png>
+Package pdftex.def Info: images/latency_vs_size.png used on input line 200.
+(pdftex.def)             Requested size: 258.75pt x 145.14859pt.
+ [7 <./images/split_vs_gpu_time.png> <./images/gpu_vs_cpu.png>] <images/unfold.
+png, id=149, 1056.94875pt x 713.66624pt>
+File: images/unfold.png Graphic file (type png)
+
+<use images/unfold.png>
+Package pdftex.def Info: images/unfold.png used on input line 208.
+(pdftex.def)             Requested size: 258.75pt x 174.70274pt.
+
+<images/iter_plot.png, id=150, 917.4275pt x 607.26875pt>
+File: images/iter_plot.png Graphic file (type png)
+
+<use images/iter_plot.png>
+Package pdftex.def Info: images/iter_plot.png used on input line 216.
+(pdftex.def)             Requested size: 258.75pt x 171.27576pt.
+ [8 <./images/latency_vs_size.png> <./images/unfold.png>] [9 <./images/iter_plo
+t.png>] [10] (./main.aux) ) 
 Here is how much of TeX's memory you used:
- 3537 strings out of 493029
- 47124 string characters out of 6136234
+ 3563 strings out of 493029
+ 47748 string characters out of 6136234
  119297 words of memory out of 5000000
- 7001 multiletter control sequences out of 15000+600000
+ 7021 multiletter control sequences out of 15000+600000
  11671 words of font info for 46 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 38i,11n,26p,549b,566s stack positions out of 5000i,500n,10000p,200000b,80000s
-</usr/share/texlive/texmf-dist/fonts/type1/public/amsfont
-s/cm/cmbx10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/c
-mbx12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.
-pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></u
-sr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/shar
-e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/share/texli
-ve/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf
--dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/
-fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/share/texlive/texmf-dist/fonts/
-type1/public/amsfonts/symbols/msam10.pfb>
-Output written on main.pdf (6 pages, 941551 bytes).
+ 38i,11n,26p,653b,566s stack positions out of 5000i,500n,10000p,200000b,80000s
+</usr/share/texlive/texmf-dist/fonts/type1/public/am
+sfonts/cm/cmbx10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts
+/cm/cmbx12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cm
+mi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pf
+b></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr
+/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/share/
+texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/
+texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-
+dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/share/texlive/texmf-dist/f
+onts/type1/public/amsfonts/symbols/msam10.pfb>
+Output written on main.pdf (10 pages, 1074745 bytes).
 PDF statistics:
- 172 PDF objects out of 1000 (max. 8388607)
- 112 compressed objects within 2 object streams
+ 197 PDF objects out of 1000 (max. 8388607)
+ 123 compressed objects within 2 object streams
  0 named destinations out of 1000 (max. 500000)
- 16 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 41 words of extra memory for PDF output out of 10000 (max. 10000000)
 
