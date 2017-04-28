@@ -99,8 +99,7 @@ int main(int argc, char* argv[]){
 
 	init_bitmat(bitmat, gnum_subs, gnum_preds, gnum_objs, gnum_comm_so, SPO_BITMAT);
 	unsigned int node = atoi(argv[1]);
-	unsigned int ratio = atoi(argv[2]);
-	
+	unsigned int ratio;
 	unsigned int triples =  load_from_dump_file(dumpfile, node, bitmat, true, true, NULL, 0, 0, NULL, 0, true);
 	
 	struct timeval t1, t2;
@@ -148,47 +147,49 @@ int main(int argc, char* argv[]){
     convert_bitmat_to_gpu_input(bitmat, gpu_input, mapping, gnum_subs);
     unsigned char* gpu_objfold = (unsigned char*)malloc(mask_size * sizeof(unsigned char));
 
-	unsigned int split = gnum_subs/ratio;
-	unsigned int partial_rows = (gnum_subs%split > 0 ? gnum_subs/split + 1 : gnum_subs/split);
-	unsigned int partial_size = partial_rows * mask_size;
-	unsigned char* partial = (unsigned char*)malloc(partial_size * sizeof(unsigned char));
-	memset(partial, 0 , partial_size);	
-	cudaMalloc((void**)&d_partial, partial_size * sizeof(unsigned char));
+    for(ratio=40; ratio<=45; ratio+=5){
+    	unsigned int split = gnum_subs/ratio;
+		unsigned int partial_rows = (gnum_subs%split > 0 ? gnum_subs/split + 1 : gnum_subs/split);
+		unsigned int partial_size = partial_rows * mask_size;
+		unsigned char* partial = (unsigned char*)malloc(partial_size * sizeof(unsigned char));
+		memset(partial, 0 , partial_size);	
+		cudaMalloc((void**)&d_partial, partial_size * sizeof(unsigned char));
 
-	gettimeofday(&t1,NULL);
-    cudaMemcpy(d_partial, partial, partial_size * sizeof(unsigned char), cudaMemcpyHostToDevice);
-    gettimeofday(&t2,NULL);
-    memory_latency += (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
-	memory_latency += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
+		gettimeofday(&t1,NULL);
+	    cudaMemcpy(d_partial, partial, partial_size * sizeof(unsigned char), cudaMemcpyHostToDevice);
+	    gettimeofday(&t2,NULL);
+	    memory_latency += (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
+    	memory_latency += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
+		
+		int numBlocks = (partial_rows%threadsPerBlock > 0 ? partial_rows/threadsPerBlock + 1 : partial_rows/threadsPerBlock);    
+		gettimeofday(&t1,NULL);
+	    foldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_partial, gnum_subs, mask_size, split);
+	    gettimeofday(&t2,NULL);
+	    kernel_time = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
+    	kernel_time += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
+	    
+	    gettimeofday(&t1,NULL);
+	    cudaMemcpy(partial, d_partial, partial_size * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+	    gettimeofday(&t2,NULL);
+	    memory_latency += (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
+    	memory_latency += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
+
+	    memset(gpu_objfold, 0 , mask_size);
+
+	    gettimeofday(&t1,NULL);
+	    for(unsigned int i=0; i<partial_rows; i++){
+	        for(unsigned int j=0; j<mask_size; j++){
+	            gpu_objfold[j] |= partial[i*mask_size + j];
+	        }
+
+    	}
+    	gettimeofday(&t2,NULL);
+		add_time = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
+    	add_time += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
+
+    	cout << node << " " << bitmat_size << " MB " << ratio << " " <<  cpu_time << " ms. "  << memory_latency << " ms. " << kernel_time << " ms. " << add_time << " ms.\n";
+    }
 	
-	int numBlocks = (partial_rows%threadsPerBlock > 0 ? partial_rows/threadsPerBlock + 1 : partial_rows/threadsPerBlock);    
-	gettimeofday(&t1,NULL);
-    foldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_partial, gnum_subs, mask_size, split);
-    gettimeofday(&t2,NULL);
-    kernel_time = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
-	kernel_time += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
-    
-    gettimeofday(&t1,NULL);
-    cudaMemcpy(partial, d_partial, partial_size * sizeof(unsigned char), cudaMemcpyDeviceToHost);
-    gettimeofday(&t2,NULL);
-    memory_latency += (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
-	memory_latency += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
-
-    memset(gpu_objfold, 0 , mask_size);
-
-    gettimeofday(&t1,NULL);
-    for(unsigned int i=0; i<partial_rows; i++){
-        for(unsigned int j=0; j<mask_size; j++){
-            gpu_objfold[j] |= partial[i*mask_size + j];
-        }
-
-	}
-	gettimeofday(&t2,NULL);
-	add_time = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
-	add_time += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
-
-	cout << node << " " << bitmat_size << " MB " << ratio << " " <<  cpu_time << " ms. "  << memory_latency << " ms. " << kernel_time << " ms. " << add_time << " ms.\n";
-    
 	
     
     

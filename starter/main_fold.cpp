@@ -74,19 +74,19 @@ __global__ void foldkernel(int* mapping, unsigned char* input, unsigned char* re
 int main(){
     struct timeval t1, t2;
     double elapsedTime;
-
-	BitMat* bitmat = new BitMat;
+    
+	/*BitMat* bitmat = new BitMat;
 	unsigned int node = 1;
 	//char dumpfile[1024] = "/work/scratch/datasets/dbpedia/all_data_bitmats/dbpedia565m_pos_odump";
-    char dumpfile[1024] = "/data/gpuuser1/dbpedia565m_pos_odump";	
-	gnum_subs=10;
+    char dumpfile[1024] = "/data/gpuuser1/dbpedia565m_pos_odump";	*/
+/*	gnum_subs=10;
 	gnum_preds=57453;
 	gnum_objs=153561757;
 	gnum_comm_so=27116793;
 
 	init_bitmat(bitmat, gnum_subs, gnum_preds, gnum_objs, gnum_comm_so, POS_BITMAT);
 
-	unsigned int triples =  load_from_dump_file(dumpfile, node, bitmat, true, true, NULL, 0, 0, NULL, 0, true);
+	unsigned int triples =  load_from_dump_file(dumpfile, node, bitmat, true, true, NULL, 0, 0, NULL, 0, true);*/
 	//print_bitmat(bitmat->bm);
 	//cout << count_size_of_bitmat(bitmat) << endl;	
     gettimeofday(&t1, NULL);

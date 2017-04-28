@@ -6204,10 +6204,11 @@ void convert_bitmat_to_gpu_input(BitMat* bitmat, unsigned char* gpu_input, int* 
 }
 
 void test_fold(unsigned char* cpu_fold, unsigned char* gpu_fold, unsigned int mask_size){
+
 	if(mask_size > 0){
 		for(unsigned int i=0; i<mask_size; i++){
 			if(cpu_fold[i] != gpu_fold[i]){
-				cout << i << " FAIL\n";
+				cout << i << " " << mask_size <<" FAIL\n";
 				return;
 			}
 		}

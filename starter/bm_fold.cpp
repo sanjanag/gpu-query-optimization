@@ -6,6 +6,8 @@
 #include <cstring>
 #include <vector>
 #include <utility>
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
 
 using namespace std;
 
@@ -29,7 +31,7 @@ void get_row_bytes(vector<pair<bool,vector<unsigned int> > > comp_mat, int n, un
     }
 }
 
-void get_bitmat(list<row>& bm, unsigned char* row_bytes, int size_row_bytes, vector<pair<bool,vector<unsigned int> > > comp_mat){
+void get_bitmat(vector<row>& bm, unsigned char* row_bytes, int size_row_bytes, vector<pair<bool,vector<unsigned int> > > comp_mat){
     int rownum=0;
 
     for(int i=0; i<size_row_bytes; i++){
@@ -144,11 +146,11 @@ void print_mask(unsigned char* mask, int size){
     cout << endl;
 }
 
-void fold_bitmat(list<row> bm, unsigned char* mask, int size_mask){
+void fold_bitmat(vector<row> bm, unsigned char* mask, int size_mask){
     //print_mask(mask,size_mask);
     int n = bm.size();
     int gap_size = sizeof(unsigned int);
-    for(list<row>::iterator it=bm.begin(); it!=bm.end(); it++){
+    for(vector<row>::iterator it=bm.begin(); it!=bm.end(); it++){
         unsigned char* data=(*it).data;
         int size;
         memcpy(&size, data, gap_size);
@@ -196,7 +198,7 @@ int main(int argc, char* argv[]){
     get_row_bytes(comp_mat, n, row_bytes);
 
     //create bitmat
-    list<row> bm;
+    vector<row> bm;
     get_bitmat(bm, row_bytes,size_row_bytes, comp_mat);
     //print_bitmat(bm);
 
@@ -205,5 +207,7 @@ int main(int argc, char* argv[]){
     memset(mask,0,size_mask);
     fold_bitmat(bm, mask, size_mask);
     print_mask(mask,size_mask);
+    
+
     return 0;
 }

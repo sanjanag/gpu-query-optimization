@@ -7,8 +7,12 @@
 #include <vector>
 #include <utility>
 #include <cuda.h>
+#include <sys/time.h>
 
 using namespace std;
+
+#define ROW_SIZE_BYTES 4
+#define GAP_SIZE_BYTES 4
 
 struct row {
 	unsigned int rowid; //nodeid from the orig graph
@@ -43,21 +47,21 @@ void get_bitmat(vector<row>& bm, unsigned char* row_bytes, int size_row_bytes, v
                     bool start = comp_mat[rownum].first;
                     vector<unsigned int> comp_row = comp_mat[rownum].second;
 
-                    int gap_size = sizeof(unsigned int);
-                    int size = comp_row.size()*gap_size+1;
-                    unsigned char* data = (unsigned char*)malloc(size+gap_size);
+                    //int gap_size = sizeof(unsigned int);
+                    int size = comp_row.size()*GAP_SIZE_BYTES+1;
+                    unsigned char* data = (unsigned char*)malloc(size + ROW_SIZE_BYTES);
 
-                    memcpy(data, &size, gap_size);
+                    memcpy(data, &size, ROW_SIZE_BYTES);
 
-                    unsigned char* curr = data+gap_size;
+                    unsigned char* curr = data + ROW_SIZE_BYTES;
 
                     *curr = (start ? 0x80 : 0x00);
                     curr++;
 
                     for(int k=0;k<comp_row.size();k++){
                         unsigned int tmp = comp_row[k];
-                        memcpy(curr, &tmp, gap_size);
-                        curr+=gap_size;
+                        memcpy(curr, &tmp, GAP_SIZE_BYTES);
+                        curr+=GAP_SIZE_BYTES;
                     }
 
                     row r = {rownum,data};
@@ -153,20 +157,20 @@ void print_mask(unsigned char* mask, int size){
 void fold_bitmat(vector<row> bm, unsigned char* mask, int size_mask){
     //print_mask(mask,size_mask);
     int n = bm.size();
-    int gap_size = sizeof(unsigned int);
+    //int gap_size = sizeof(unsigned int);
     for(vector<row>::iterator it=bm.begin(); it!=bm.end(); it++){
         unsigned char* data=(*it).data;
         int size;
-        memcpy(&size, data, gap_size);
-        int nums = (size-1)/gap_size;
+        memcpy(&size, data, ROW_SIZE_BYTES);
+        int nums = (size-1)/GAP_SIZE_BYTES;
         int count=0;
-        data+=gap_size;
+        data+=ROW_SIZE_BYTES;
         bool flag = *data;
         data++;
         for(int i=0;i<nums;i++){
             int tmp;
-            memcpy(&tmp, data, gap_size);
-            data+=gap_size;
+            memcpy(&tmp, data, GAP_SIZE_BYTES);
+            data+=GAP_SIZE_BYTES;
             if(flag){
                 for(int pos=count;pos <(count+tmp);pos++){
                     mask[pos/8] |= (0x80 >> (pos%8));
@@ -181,12 +185,12 @@ void fold_bitmat(vector<row> bm, unsigned char* mask, int size_mask){
 
 int get_sizeof_1dimarr(vector<row> bm){
     int res = 0;
-    int gap_size = sizeof(unsigned int);
+    //int gap_size = sizeof(unsigned int);
     for(int i=0; i<bm.size(); i++){
-        res += gap_size;
+        res += ROW_SIZE_BYTES;
         unsigned char* data = bm[i].data;
         int temp;
-        memcpy(&temp, data, gap_size);
+        memcpy(&temp, data, GAP_SIZE_BYTES);
         res += temp;
     }
     return res;
@@ -195,7 +199,7 @@ int get_sizeof_1dimarr(vector<row> bm){
 void convert_bitmat_to_1dimarr(vector<row> bm, int* mapping, int n, unsigned char* gpu_input){
     //cout << "hello\n";
     unsigned char* total_data = gpu_input;
-    int gap_size = sizeof(unsigned int);
+    //int gap_size = sizeof(unsigned int);
     int j = 0;
     for(int i=0; i < n; i++){
         //cout << i << endl;
@@ -205,8 +209,8 @@ void convert_bitmat_to_1dimarr(vector<row> bm, int* mapping, int n, unsigned cha
             mapping[i] = total_data - gpu_input; 
             unsigned char* data = bm[j].data;
             int size;
-            memcpy(&size, data, gap_size);
-            size += gap_size;
+            memcpy(&size, data, ROW_SIZE_BYTES);
+            size += ROW_SIZE_BYTES;
             memcpy(total_data, data, size);
             total_data += size;
             j++;
@@ -359,44 +363,44 @@ void get_mask(unsigned char* mask, bool* raw_mask, int size_mask, int n){
 
 void unfold_bitmat(vector<row> bm, unsigned char* mask, int size_mask, vector<row>& ubm){
     
-    int gap_size = sizeof(unsigned int);
+    //int gap_size = sizeof(unsigned int);
     
     //vector<row> ubm;
     
     for(vector<row>::iterator it = bm.begin(); it!= bm.end(); it++){
         unsigned int andres_size = 0;
-        unsigned char *andres = (unsigned char *) malloc (gap_size * 2 * size_mask + gap_size + 1 + 1024);
+        unsigned char *andres = (unsigned char *) malloc (GAP_SIZE_BYTES * 2 * size_mask + ROW_SIZE_BYTES + 1 + 1024);
         unsigned int rowid = (*it).rowid;
         unsigned char* data  = (*it).data;
         unsigned int rowsize = 0;
-        memcpy(&rowsize, data, gap_size);
-        data += gap_size;
-        unsigned int cnt = 0, total_cnt = (rowsize-1)/gap_size, tmpcnt = 0, triplecnt = 0,
+        memcpy(&rowsize, data, ROW_SIZE_BYTES);
+        data += ROW_SIZE_BYTES;
+        unsigned int cnt = 0, total_cnt = (rowsize-1)/GAP_SIZE_BYTES, tmpcnt = 0, triplecnt = 0,
                     prev1_bit = 0, prev0_bit = 0, tmpval = 0;
         bool flag = data[0], begin = true, p1bit_set = false, p0bit_set = false;
 
         while(cnt < total_cnt){
-            memcpy(&tmpcnt, &data[cnt*gap_size+1], gap_size);
+            memcpy(&tmpcnt, &data[cnt*GAP_SIZE_BYTES+1], GAP_SIZE_BYTES);
 
             if(flag){
                 for(unsigned int i = triplecnt; i < triplecnt + tmpcnt; i++){
                     if((mask[i/8] & (0x80 >> (i%8))) == 0x00){
                         if(begin){
                             begin = false;
-                            andres[gap_size] = 0x00;
-                            andres_size = gap_size + 1;
+                            andres[ROW_SIZE_BYTES] = 0x00;
+                            andres_size = ROW_SIZE_BYTES + 1;
                             p0bit_set = true;
                         }
                         else{
                             if(!p0bit_set){
-                                memcpy(&andres[andres_size], &i, gap_size);
-                                andres_size += gap_size;
+                                memcpy(&andres[andres_size], &i, GAP_SIZE_BYTES);
+                                andres_size += GAP_SIZE_BYTES;
                                 p0bit_set = true;
                             }
                             else if(prev0_bit != (i-1)){
                                 tmpval = i - prev0_bit - 1;
-                                memcpy(&andres[andres_size], &tmpval, gap_size);
-                                andres_size += gap_size;
+                                memcpy(&andres[andres_size], &tmpval, GAP_SIZE_BYTES);
+                                andres_size += GAP_SIZE_BYTES;
                             }
                         }
                         prev0_bit = i;
@@ -404,20 +408,20 @@ void unfold_bitmat(vector<row> bm, unsigned char* mask, int size_mask, vector<ro
                     else if(mask[i/8] & (0x80 >> (i%8))){
                         if(begin){
                             begin = false;
-                            andres[gap_size] = 0x80;
-                            andres_size = gap_size + 1;
+                            andres[ROW_SIZE_BYTES] = 0x80;
+                            andres_size = ROW_SIZE_BYTES + 1;
                             p1bit_set = true;
                         }
                         else{
                             if(!p1bit_set){
-                                memcpy(&andres[andres_size], &i, gap_size);
-                                andres_size += gap_size;
+                                memcpy(&andres[andres_size], &i, GAP_SIZE_BYTES);
+                                andres_size += GAP_SIZE_BYTES;
                                 p1bit_set = true;
                             }
                             else if(prev1_bit != (i-1)){
                                 tmpval = i - prev1_bit - 1;
-                                memcpy(&andres[andres_size], &tmpval, gap_size);
-                                andres_size += gap_size;
+                                memcpy(&andres[andres_size], &tmpval, GAP_SIZE_BYTES);
+                                andres_size += GAP_SIZE_BYTES;
                             }
                         }
                         prev1_bit = i;
@@ -427,21 +431,21 @@ void unfold_bitmat(vector<row> bm, unsigned char* mask, int size_mask, vector<ro
             else{
                 if(begin){
                     begin = false;
-                    andres[gap_size] = 0x00;
-                    andres_size = gap_size+1;
+                    andres[ROW_SIZE_BYTES] = 0x00;
+                    andres_size = ROW_SIZE_BYTES+1;
                     p0bit_set = true;
                 }
                 else{
                     if(!p0bit_set){
                         tmpval = prev1_bit + 1;
-                        memcpy(&andres[andres_size], &tmpval, gap_size);
-                        andres_size += gap_size;
+                        memcpy(&andres[andres_size], &tmpval, GAP_SIZE_BYTES);
+                        andres_size += GAP_SIZE_BYTES;
                         p0bit_set = true;
                     }
                     else if(prev0_bit != (triplecnt-1)){
                         tmpval = triplecnt -prev0_bit - 1;
-                        memcpy(&andres[andres_size], &tmpval, gap_size);
-                        andres_size += gap_size;
+                        memcpy(&andres[andres_size], &tmpval, GAP_SIZE_BYTES);
+                        andres_size += GAP_SIZE_BYTES;
                     }
                 }
                 prev0_bit = triplecnt + tmpcnt - 1;
@@ -456,13 +460,13 @@ void unfold_bitmat(vector<row> bm, unsigned char* mask, int size_mask, vector<ro
         if(prev1_bit > prev0_bit){
             if(!p0bit_set){
                 tmpval = prev1_bit + 1;
-                memcpy(&andres[andres_size], &tmpval, gap_size);
+                memcpy(&andres[andres_size], &tmpval, GAP_SIZE_BYTES);
             }
             else{
                 tmpval = prev1_bit - prev0_bit;
-                memcpy(&andres[andres_size], &tmpval, gap_size);
+                memcpy(&andres[andres_size], &tmpval, GAP_SIZE_BYTES);
             }
-            andres_size +=  gap_size;
+            andres_size +=  GAP_SIZE_BYTES;
         }
         else{
             if(!p1bit_set){
@@ -473,13 +477,13 @@ void unfold_bitmat(vector<row> bm, unsigned char* mask, int size_mask, vector<ro
             }
             else{
                 tmpval = prev0_bit - prev1_bit;
-                memcpy(&andres[andres_size], &tmpval, gap_size);
+                memcpy(&andres[andres_size], &tmpval, GAP_SIZE_BYTES);
             }
-            andres_size += gap_size;
+            andres_size += GAP_SIZE_BYTES;
         }
 
-        tmpval = andres_size - gap_size;
-        memcpy(andres, &tmpval, gap_size);
+        tmpval = andres_size - ROW_SIZE_BYTES;
+        memcpy(andres, &tmpval, ROW_SIZE_BYTES);
         row r = {rowid,andres};
         ubm.push_back(r);
         /*data -= gap_size;
@@ -561,29 +565,31 @@ void test_unfold(vector<row> corr, vector<row> sample){
 
 
 void convert_1dimarr_to_bitmat(unsigned char* input, vector<row>& bm, int n, int size_andres){
-    int gap_size = sizeof(unsigned int);
+    //int gap_size = sizeof(unsigned int);
     
     for(int i=0; i<n; i++){
         //cout << i << endl;
         unsigned char* data = input+size_andres*i;
         unsigned int rowsize;
-        memcpy(&rowsize, data, gap_size);
-        int total_cnt = (rowsize-1)/gap_size;
-        if(data[gap_size]==0x00 &&  total_cnt==1){
-            //cout << "hi\n";
+        memcpy(&rowsize, data, ROW_SIZE_BYTES);
+        int total_cnt = (rowsize-1)/GAP_SIZE_BYTES;
+        if(data[ROW_SIZE_BYTES]==0x00 &&  total_cnt==1){
             continue;
         }
-        unsigned char* rdata = (unsigned char*)malloc(gap_size+1+total_cnt*gap_size);
-        memcpy(rdata, data, (gap_size+1+total_cnt*gap_size));
+        unsigned char* rdata = (unsigned char*)malloc(ROW_SIZE_BYTES + 1 + total_cnt*GAP_SIZE_BYTES);
+        memcpy(rdata, data, (ROW_SIZE_BYTES + 1 + total_cnt*GAP_SIZE_BYTES));
         row r = {i,rdata};
         bm.push_back(r);
     }
 }
 
 int main(int argc, char* argv[]){
+    struct timeval t1, t2;
+    double elapsedTime;
     ifstream in;
     in.open("data.in");
     int n=atoi(argv[1]);
+    int iter=atoi(argv[2]);
     bool raw[n*n];
 
     //read sparse matrix from raw file
@@ -599,7 +605,6 @@ int main(int argc, char* argv[]){
 
     bool raw_out[n*n];
     brute_force_unfold(raw, raw_mask, raw_out, n);
- 
     vector<pair<bool,vector<unsigned int> > > corr_out(n);
     compress_sparse_bitmat(raw_out, corr_out, n);
     int size_row_bytes = (n%8>0 ? n/8+1 : n/8);
@@ -634,7 +639,17 @@ int main(int argc, char* argv[]){
     
     //CPU UNFOLD
     vector<row> ubm;
-    unfold_bitmat(bm, mask, size_mask, ubm);
+    gettimeofday(&t1, NULL);
+    for(int q=0; q<iter;q++){
+        ubm.clear();
+        unfold_bitmat(bm, mask, size_mask, ubm);
+    
+    }
+    gettimeofday(&t2, NULL);
+    elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
+    elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
+    cout << elapsedTime << " ms.\n";    
+    //cout << "hello2\n";
     //print_bitmat(ubm);
     
     //TESTER FUNCTION
@@ -649,8 +664,8 @@ int main(int argc, char* argv[]){
     int size_gpu_input = get_sizeof_1dimarr(bm);
     unsigned char* gpu_input = (unsigned char*)malloc(size_gpu_input*sizeof(unsigned char));
     convert_bitmat_to_1dimarr(bm, mapping, n, gpu_input);
-    int gap_size = sizeof(unsigned int);
-    int size_gpu_output =  (gap_size * 2 * size_mask + gap_size + 1 + 1024)*n;
+    //int gap_size = sizeof(unsigned int);
+    int size_gpu_output =  (GAP_SIZE_BYTES * 2 * size_mask + ROW_SIZE_BYTES + 1 + 1024)*n;
     unsigned char* gpu_output = (unsigned char*)malloc(size_gpu_output*sizeof(unsigned char));
     for(int i=0;i<size_gpu_output ;i++)
         gpu_output[i] = 0x00;
@@ -665,6 +680,7 @@ int main(int argc, char* argv[]){
     cudaMalloc((void**)&d_mask, size_mask*sizeof(unsigned char));
     cudaMalloc((void**)&d_output,size_gpu_output*sizeof(unsigned char));
 
+    gettimeofday(&t1, NULL);
     cudaMemcpy(d_mapping, mapping, sizeof(int)*n, cudaMemcpyHostToDevice);
     cudaMemcpy(d_input, gpu_input, sizeof(unsigned char)* size_gpu_input, cudaMemcpyHostToDevice);
     cudaMemcpy(d_mask, mask, sizeof(unsigned char)*size_mask, cudaMemcpyHostToDevice);
@@ -672,30 +688,22 @@ int main(int argc, char* argv[]){
 
     int threadsPerBlock = 512;
     int numBlocks = (n+threadsPerBlock-1)/threadsPerBlock;
-    int size_andres = gap_size * 2 * size_mask + gap_size + 1 + 1024;
-    unfoldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_mask, d_output, n, size_andres);
-    cudaMemcpy(gpu_output, d_output, size_gpu_output*sizeof(unsigned char), cudaMemcpyDeviceToHost);
-
-    /*for(int i=0;i<n;i++){
-        unsigned char* data = gpu_output + i*size_andres;
-        unsigned int rowsize;
-        memcpy(&rowsize, data, sizeof(unsigned int));
-        cout << rowsize << endl;
-        data+= gap_size;
-        if(data[0]==0x00)
-            cout << "0" << endl;
-        else if(data[0]==0x80)
-            cout << "1" << endl;
-        else
-            cout << "no flag\n";
-        data++;
-        unsigned int value;
-        memcpy(&value, data, sizeof(unsigned int));
-        cout << value << endl;
-    }
-*/
+    int size_andres = GAP_SIZE_BYTES * 2 * size_mask + ROW_SIZE_BYTES + 1 + 1024;
     vector<row> gpu_bm;
-    convert_1dimarr_to_bitmat(gpu_output, gpu_bm, n, size_andres);
+    for(int q=0;q<iter;q++){
+        gpu_bm.clear();
+        unfoldkernel<<<numBlocks,threadsPerBlock>>>(d_mapping, d_input, d_mask, d_output, n, size_andres);
+        cudaMemcpy(gpu_output, d_output, size_gpu_output*sizeof(unsigned char), cudaMemcpyDeviceToHost);
+        convert_1dimarr_to_bitmat(gpu_output, gpu_bm, n, size_andres);
+        
+    }
+
+    
+    
+    gettimeofday(&t2, NULL);
+    elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;      // sec to ms
+    elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;   // us to ms
+    cout << elapsedTime << " ms.\n";    
 //    print_bitmat(gpu_bm);
     //cout << "hello7\n";
     test_unfold(out_bm, gpu_bm);

@@ -1,0 +1,4 @@
+#!/bin/sh
+
+scp gpu_fold.cpp read_data.cpp bitmat.hpp bitmatops.cpp gpuuser1@csews23.cse.iitk.ac.in:/data/gpuuser1/gpu_query_opt/
+

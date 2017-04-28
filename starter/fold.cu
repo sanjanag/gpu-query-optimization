@@ -4,6 +4,8 @@
 #include <time.h>
 #include <stdio.h>
 #include <fstream>
+#include <sys/time.h>
+
 
 using namespace std;
 
@@ -39,7 +41,8 @@ int main(int argc, char* argv[]){
 	int iterations = atoi(argv[4]); //Iterations to compare the results
 
 	//clock variables
-	clock_t start, end;
+    timeval time;
+	int start, end;
 	double gpu_time_used,cpu_time_used;
 	
 	//Threads and block configuration
@@ -72,7 +75,7 @@ int main(int argc, char* argv[]){
 
 	bool *d_mat,*d_res;
 
-	start=clock();
+	start=gettimeofday();
 
 	//Memory allocation in GPU
 	cudaMalloc((void**)&d_mat, size_mat);
@@ -95,21 +98,21 @@ int main(int argc, char* argv[]){
 				mask[j] |= res[i*n+j];
 		}
 	}	
-	end = clock();
+	end = gettimeofday();
 
 	//calculating time taken by GPU
 	gpu_time_used = ((double)(end-start))/CLOCKS_PER_SEC;
 	
 
 	//CPU computation
-	start=clock();
+	start= gettimeofday();
 	for(int k = 0; k < iterations; k++){
 		for(int i = 0; i < n; i++){
 			for(int j = 0; j < n; j++)
 				mask[j] |= mat[i*n+j];
 		}
 	}	
-	end = clock();
+	end = gettimeofday();
 	//calculating time taken by CPU
 	cpu_time_used = ((double)(end-start))/CLOCKS_PER_SEC;
 	cout << "CPU/GPU: " << cpu_time_used/gpu_time_used << endl;	

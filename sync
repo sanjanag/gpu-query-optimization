@@ -1,0 +1,6 @@
+#!/bin/sh
+
+scp read_data.cpp sanjana@172.27.17.202:/work/scratch/sanjana/gpu_query_opt
+scp bitmat.hpp sanjana@172.27.17.202:/work/scratch/sanjana/gpu_query_opt
+scp bitmatops.cpp sanjana@172.27.17.202:/work/scratch/sanjana/gpu_query_opt
+

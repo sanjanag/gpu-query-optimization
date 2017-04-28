@@ -1,0 +1,7 @@
+node bitmat_size ratio CPU_time memory_latency kernel_time add_time
+12126690
+3 104.084 MB 1 455.114 ms. 8455.32 ms. 0.575 ms. 98.819 ms.
+3 104.084 MB 2 455.114 ms. 8455.32 ms. 0.005 ms. 296.464 ms.
+3 104.084 MB 3 455.114 ms. 8455.32 ms. 0.005 ms. 395.233 ms.
+3 104.084 MB 4 455.114 ms. 8455.32 ms. 0.005 ms. 494.116 ms.
+3 104.084 MB 5 455.114 ms. 8455.33 ms. 0.005 ms. 592.896 ms.

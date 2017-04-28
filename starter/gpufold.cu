@@ -5,6 +5,7 @@
 #include <utility>
 #include <cstring>
 #include <stdlib.h>
+#include <cuda.h>
 
 using namespace std;
 

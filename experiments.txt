@@ -1,0 +1,5 @@
+* GPUFold performance with number of threads
+* Memory latency with size of bitmat
+* CPU/GPU Fold operation performance with size of bitmat
+* CPU?GPU Unfold operation performance with size of matrix (simulated data)
+* Difference in CPU/GPU performance with number of times the operation is performed
